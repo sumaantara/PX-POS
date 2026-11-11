@@ -1,0 +1,7 @@
+{
+  "appId": "com.px.pos",
+  "appName": "PX POS",
+  "webDir": "www",
+  "android": { "allowMixedContent": false, "backgroundColor": "#0f766e" },
+  "plugins": { "SplashScreen": { "launchShowDuration": 800, "backgroundColor": "#0f766e", "showSpinner": false } }
+}

@@ -1,0 +1,56 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ["www/**", "android-overlay/**", "tools/prepare-android.py", "capacitor.config.json", "package.json", "resources/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: { group: android, cancel-in-progress: true }
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - name: Create Android project
+        run: |
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#0f766e' --iconBackgroundColorDark '#0f766e' --splashBackgroundColor '#0f766e' --splashBackgroundColorDark '#0f766e'
+          VERSION_NAME="1.0.${{ github.run_number }}" VERSION_CODE="${{ github.run_number }}" python3 tools/prepare-android.py
+          npx cap sync android
+      - name: Keystore
+        env: { KS: "${{ secrets.PX_KEYSTORE_BASE64 }}" }
+        run: |
+          if [ -n "$KS" ]; then echo "$KS" | base64 -d > "$RUNNER_TEMP/px.keystore"; echo "PX_KEYSTORE=$RUNNER_TEMP/px.keystore" >> "$GITHUB_ENV"; fi
+      - name: Build release APK
+        working-directory: android
+        env:
+          PX_KEYSTORE_PASSWORD: ${{ secrets.PX_KEYSTORE_PASSWORD }}
+          PX_KEY_ALIAS: ${{ secrets.PX_KEY_ALIAS }}
+          PX_KEY_PASSWORD: ${{ secrets.PX_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$PX_KEYSTORE" ]; then ./gradlew assembleRelease --no-daemon; cp app/build/outputs/apk/release/app-release.apk ../PX-POS.apk;
+          else ./gradlew assembleDebug --no-daemon; cp app/build/outputs/apk/debug/app-debug.apk ../PX-POS.apk; fi
+      - uses: actions/upload-artifact@v4
+        with: { name: PX-POS-apk, path: PX-POS.apk }
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: PX POS 1.0.${{ github.run_number }}
+          make_latest: "true"
+          files: PX-POS.apk
+          body: |
+            APK Android PX POS. Download `PX-POS.apk`, buka di HP Android, izinkan "Install dari sumber tidak dikenal".
+            Update: install versi baru di atas versi lama (data tetap aman di server).
