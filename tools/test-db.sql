@@ -12,6 +12,10 @@ begin
   insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data, created_at, updated_at)
   values (owner_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner-test@px-pos.app', '{"full_name":"Owner Test"}', now(), now()),
          (kasir_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'kasir-test@px-pos.app', '{"full_name":"Kasir Test","username":"kasirtest"}', now(), now());
+  -- a real owner may already exist: force the test roles (as postgres, no JWT → guard allows it)
+  update public.profiles set role = 'owner', active = true where id = owner_id;
+  update public.profiles set role = 'cashier', active = false where id = kasir_id;
+  update public.settings set service_percent = 5, tax_percent = 10, max_discount_pct = 100, payment_methods = array['Cash','QRIS','Transfer','Card'] where id = 1;
   out := out || 'profiles: ' || (select string_agg(full_name||'/'||role||'/'||active, ', ') from public.profiles where id in (owner_id, kasir_id)) || E'\n';
 
   select id into bike from public.services where name like 'Bike Rental%';
@@ -41,7 +45,8 @@ begin
           jsonb_build_object('service_id', bike, 'qty', 3, 'item_ref', 'B-07'),
           jsonb_build_object('service_id', snork, 'qty', 1),
           jsonb_build_object('service_id', laundry, 'qty', 2.5))));
-  out := out || 'sale1: ' || r::text || E'\n';
+  out := out || 'sale1: ' || r::text || ' (expect total 1429313, change 570687)' || E'\n';
+  out := out || 'sale1 row: ' || (select format('sub=%s disc=%s srv=%s tax=%s', subtotal, discount, service_charge, tax) from public.transactions where id = (r->>'id')::uuid) || E'\n';
   r2 := public.create_sale(jsonb_build_object('payment_method','QRIS','items', jsonb_build_array(jsonb_build_object('service_id', bike, 'qty', 1))));
   out := out || 'sale2: ' || r2::text || E'\n';
   begin perform public.create_sale(jsonb_build_object('items', jsonb_build_array(jsonb_build_object('service_id', bike, 'price', 1))));
@@ -73,12 +78,13 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', owner_id, 'role', 'authenticated')::text, true);
   perform public.void_sale((r2->>'id')::uuid, 'salah input');
   rep := public.sales_report((now() at time zone 'Asia/Makassar')::date, (now() at time zone 'Asia/Makassar')::date);
-  out := out || 'report: count=' || (rep->>'count') || ' void=' || (rep->>'void_count') || ' gross=' || (rep->>'gross') || ' disc=' || (rep->>'discount') || ' total=' || (rep->>'total')
+  out := out || 'report: count=' || (rep->>'count') || ' service=' || (rep->>'service') || ' tax=' || (rep->>'tax') || ' void=' || (rep->>'void_count') || ' gross=' || (rep->>'gross') || ' disc=' || (rep->>'discount') || ' total=' || (rep->>'total')
       || E'\n  by_category=' || (rep->'by_category')::text || E'\n  by_method=' || (rep->'by_method')::text || E'\n';
   -- owner cannot be demoted by itself / guard
   begin update public.profiles set role = 'cashier' where id = owner_id; out := out || 'FAIL owner self-demote' || E'\n';
   exception when others then out := out || 'ok owner guard: ' || sqlerrm || E'\n'; end;
 
   perform set_config('role', 'postgres', true);
+  out := out || 'cron key check: ' || public.px_check_cron_key('wrong')::text || E'\n';
   raise exception E'PX-POS-TEST (rolled back)\n%', out;
 end $$;
