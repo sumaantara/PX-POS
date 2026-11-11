@@ -153,7 +153,7 @@
     return `<div class="login"><form class="card col" data-form="${reg ? "register" : "login"}" autocomplete="on">
       <div class="row"><div class="logo-mark">PX</div><div><div class="b" style="font-size:20px">PX POS</div><div class="muted small">Kasir & Backoffice</div></div></div>
       ${reg ? `<label class="f">Nama lengkap<input class="inp" name="full_name" required></label>` : ""}
-      <label class="f">Username atau email<input class="inp" name="user" autocomplete="username" autocapitalize="none" required></label>
+      <label class="f">${reg ? "Email" : "Username atau email"}<input class="inp" name="user" ${reg ? 'type="email"' : ""} autocomplete="${reg ? "email" : "username"}" autocapitalize="none" required></label>
       <label class="f">Password<input class="inp" name="password" type="password" autocomplete="${reg ? "new-password" : "current-password"}" required minlength="6"></label>
       <button class="btn pri lg" type="submit">${reg ? "Buat akun" : "Masuk"}</button>
       <div class="small muted center">${reg
@@ -803,12 +803,12 @@
       await run(async () => { const { error } = await sb.auth.signInWithPassword({ email: user, password: fd.get("password") }); if (error) throw new Error(error.message === "Invalid login credentials" ? "Username/email atau password salah" : error.message); });
     },
     register: async (fd) => {
-      let user = String(fd.get("user")).trim().toLowerCase(); let username = null;
-      if (!user.includes("@")) { username = user; user = `${user}@${C.usernameDomain}`; }
+      const user = String(fd.get("user")).trim().toLowerCase(); const username = null;
+      if (!user.includes("@")) return toast("Daftar pakai email asli (link konfirmasi dikirim ke email). Akun kasir dibuat admin dengan username.", true);
       await run(async () => {
-        const { data, error } = await sb.auth.signUp({ email: user, password: fd.get("password"), options: { data: { full_name: fd.get("full_name"), username } } });
+        const { data, error } = await sb.auth.signUp({ email: user, password: fd.get("password"), options: { data: { full_name: fd.get("full_name"), username }, emailRedirectTo: C.webUrl } });
         if (error) throw error;
-        if (!data.session) toast("Akun dibuat. Cek email untuk konfirmasi, lalu masuk.");
+        if (!data.session) { S.authMode = "login"; render(); modal(`<h2>Cek email kamu 📧</h2><div class="muted">Link konfirmasi dikirim ke <b>${h(user)}</b>. Klik link-nya, lalu kembali ke sini dan masuk dengan email + password tadi.</div><div class="mfoot"><button class="btn pri" data-act="m-close">OK</button></div>`); }
       });
     },
     svc: async (fd, form) => {
