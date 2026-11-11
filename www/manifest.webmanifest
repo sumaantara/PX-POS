@@ -1,14 +1,14 @@
 {
   "name": "PX POS",
   "short_name": "PX POS",
-  "description": "Kasir & backoffice: rent bike, e-bike, laundry, massage, snorkeling",
+  "description": "Point of sale: bike rental, e-bike, laundry, massage, snorkeling",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0f766e",
   "theme_color": "#0f766e",
-  "lang": "id",
+  "lang": "en",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

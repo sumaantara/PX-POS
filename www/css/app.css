@@ -139,3 +139,17 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 }
 .card:has(> table.t){overflow-x:auto}
 @media (max-width:900px){ table.t{font-size:13px} table.t td,table.t th{padding:7px 4px} }
+/* v2 */
+.top-logo{height:36px;max-width:90px;object-fit:contain;border-radius:8px}
+.grow-0{flex:0 0 auto}
+.nav{overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.rcpt .rlogo{max-width:62%;max-height:110px;display:inline-block;margin-bottom:4px;filter:grayscale(1) contrast(1.4)}
+#print-area .rlogo{max-width:60%;filter:grayscale(1)}
+.mode-bo .page{max-width:1280px}
+@media (max-width:1180px){ .mode-bo .top{flex-wrap:wrap} .mode-bo .nav{order:3;width:100%;margin-left:0} .mode-bo .top .grow{display:none} }
+@media (max-width:900px){
+  .mode-bo .nav{display:flex}
+  .mode-bo .page{padding-bottom:24px}
+  .mode-bo .hide-m{display:inline-flex!important}
+}

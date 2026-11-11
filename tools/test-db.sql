@@ -14,8 +14,8 @@ begin
          (kasir_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'kasir-test@px-pos.app', '{"full_name":"Kasir Test","username":"kasirtest"}', now(), now());
   out := out || 'profiles: ' || (select string_agg(full_name||'/'||role||'/'||active, ', ') from public.profiles where id in (owner_id, kasir_id)) || E'\n';
 
-  select id into bike from public.services where name like 'Rent Bike%';
-  select id into snork from public.services where name like 'Snorkeling Private 2%';
+  select id into bike from public.services where name like 'Bike Rental%';
+  select id into snork from public.services where name like 'Private Snorkeling 2%';
   select id into laundry from public.services where name like 'Laundry%';
 
   -- act as the pending cashier: must be refused

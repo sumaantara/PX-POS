@@ -5,5 +5,5 @@ window.PX_CONFIG = {
   webUrl: "https://sumaantara.github.io/PX-POS/",
   usernameDomain: "px-pos.app", // username "kasir1" signs in as kasir1@px-pos.app
   timeZone: "Asia/Makassar",
-  version: "1.0.0",
+  version: "2.0.0",
 };
