@@ -207,8 +207,8 @@ create or replace function public.sales_report(p_from date, p_to date) returns j
 language plpgsql stable security definer set search_path = public as $$
 declare r jsonb;
 begin
-  -- (security definer: current_user is always the owner, so check the API role / session user instead)
-  if not (public.px_is_admin() or coalesce(auth.role(), '') = 'service_role' or session_user = 'postgres') then
+  -- admins, or the daily-report edge function (service role key)
+  if not (public.px_is_admin() or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'Admins only';
   end if;
   with tx as (
