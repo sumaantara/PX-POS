@@ -153,3 +153,7 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
   .mode-bo .page{padding-bottom:24px}
   .mode-bo .hide-m{display:inline-flex!important}
 }
+/* receipt preview: exact paper width in characters, logo blends into the paper */
+.rcpt{width:calc(var(--cols,32) * 1ch + 26px);max-width:100%;box-sizing:border-box}
+.rcpt .rlogo{max-width:70%;max-height:120px;mix-blend-mode:multiply;filter:grayscale(1) contrast(1.2)}
+.rcpt .rl.big{white-space:normal;line-height:1.15}

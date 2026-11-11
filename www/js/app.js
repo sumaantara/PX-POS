@@ -675,10 +675,11 @@
       <div class="col" style="gap:14px">
         <form class="card col" data-form="store">
           <h3>Business</h3>
-          <label class="f">Business name<input class="inp" name="business_name" value="${h(s.business_name)}" required></label>
+          <label class="f">Business name<input class="inp" name="business_name" value="${h(s.business_name)}" placeholder="Shown in the app, emails and (optionally) on receipts"></label>
           <label class="f">Address<input class="inp" name="address" value="${h(s.address)}"></label>
           <label class="f">Phone / WhatsApp<input class="inp" name="phone" value="${h(s.phone)}"></label>
           <h3 style="margin-top:8px">Receipt</h3>
+          <label class="row"><input type="checkbox" name="receipt_show_name" ${s.receipt_show_name !== false ? "checked" : ""}> Print the business name${s.logo_data ? " under the logo" : ""}</label>
           <label class="f">Text above items (optional)<textarea class="inp" name="receipt_header" rows="2">${h(s.receipt_header)}</textarea></label>
           <label class="f">Thank-you message<textarea class="inp" name="thank_you" rows="2">${h(s.thank_you)}</textarea></label>
           <label class="f">Footer (small print)<textarea class="inp" name="receipt_footer" rows="2">${h(s.receipt_footer)}</textarea></label>
@@ -729,11 +730,22 @@
       fr.onload = () => {
         const im = new Image();
         im.onload = () => {
-          const w = Math.min(400, im.naturalWidth || 400), hgt = Math.round((im.naturalHeight || 200) * w / (im.naturalWidth || 400));
+          // trim transparent / white margins so the logo is truly centred
+          const W0 = im.naturalWidth || 400, H0 = im.naturalHeight || 200;
+          const t = document.createElement("canvas"); t.width = W0; t.height = H0;
+          const tg = t.getContext("2d"); tg.drawImage(im, 0, 0);
+          const px = tg.getImageData(0, 0, W0, H0).data;
+          let x0 = W0, y0 = H0, x1 = -1, y1 = -1;
+          for (let y = 0; y < H0; y++) for (let x = 0; x < W0; x++) {
+            const i = (y * W0 + x) * 4;
+            if (px[i + 3] > 24 && (px[i] < 235 || px[i + 1] < 235 || px[i + 2] < 235)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+          const src = x1 >= 0 ? { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } : { x: 0, y: 0, w: W0, h: H0 };
+          const w = Math.min(400, src.w), hgt = Math.round(src.h * w / src.w);
           const c = document.createElement("canvas"); c.width = w; c.height = Math.min(hgt, 300);
-          const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, w, hgt);
+          const g = c.getContext("2d"); g.drawImage(im, src.x, src.y, src.w, src.h, 0, 0, w, hgt);   // keep transparency (PNG)
           let url = c.toDataURL("image/png");
-          if (url.length > 290000) url = c.toDataURL("image/jpeg", 0.85);
+          if (url.length > 290000) { g.globalCompositeOperation = "destination-over"; g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); url = c.toDataURL("image/jpeg", 0.85); }
           if (url.length > 290000) return rej(new Error("Logo is too detailed — try a simpler or smaller image"));
           res(url);
         };
@@ -919,7 +931,7 @@
     },
     store: async (fd) => {
       const t = (k) => String(fd.get(k) ?? "").trim();
-      const row = { business_name: t("business_name"), address: t("address"), phone: t("phone"), receipt_header: String(fd.get("receipt_header")), thank_you: String(fd.get("thank_you")),
+      const row = { business_name: t("business_name"), receipt_show_name: fd.get("receipt_show_name") === "on", address: t("address"), phone: t("phone"), receipt_header: String(fd.get("receipt_header")), thank_you: String(fd.get("thank_you")),
         receipt_footer: String(fd.get("receipt_footer")), receipt_prefix: t("receipt_prefix").toUpperCase() || "PX",
         service_label: t("service_label") || "Service", service_percent: dec(fd.get("service_percent")), tax_label: t("tax_label") || "Tax", tax_percent: dec(fd.get("tax_percent")),
         max_discount_pct: dec(fd.get("max_discount_pct")), payment_methods: t("payment_methods").split(",").map((s) => s.trim()).filter(Boolean) };

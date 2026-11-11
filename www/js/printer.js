@@ -40,7 +40,8 @@
     const add = (t, o = {}) => L.push(Object.assign({ t: ascii(t), align: "left", bold: false, big: false }, o));
     const hr = (c = "-") => add(c.repeat(w));
     if (st.logo_data && cfg.logo !== false && opts.logo !== false) L.push({ logo: st.logo_data, t: "" });
-    add(st.business_name || "PX", { align: "center", bold: true, big: true });
+    const hasLogo = L.length > 0;
+    if (st.business_name && !(hasLogo && st.receipt_show_name === false)) add(st.business_name, { align: "center", bold: true, big: true });
     for (const s of [st.address, st.phone].filter(Boolean)) wrap(s, w).forEach((x) => add(x, { align: "center" }));
     if (st.receipt_header) String(st.receipt_header).split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center" })));
     if (opts.copyLabel) add(opts.copyLabel, { align: "center", bold: true });
@@ -73,6 +74,7 @@
     if (st.thank_you) String(st.thank_you).split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center", bold: true })));
     if (st.receipt_footer) String(st.receipt_footer).split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center" })));
     add("");
+    L.cols = w;
     return L;
   }
 
@@ -134,7 +136,8 @@
 
   function toHtml(lines) {
     const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-    return `<div class="rcpt">${lines.map((l) => l.logo
+    const cols = lines.cols || getCfg().width || 32;
+    return `<div class="rcpt" style="--cols:${cols}">${lines.map((l) => l.logo
       ? `<div class="rl center"><img src="${esc(l.logo)}" alt="" class="rlogo"></div>`
       : `<div class="rl ${l.align}${l.bold ? " b" : ""}${l.big ? " big" : ""}">${esc(l.t) || "&nbsp;"}</div>`).join("")}</div>`;
   }

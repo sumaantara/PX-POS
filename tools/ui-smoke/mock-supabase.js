@@ -7,7 +7,7 @@
                { id: "u-k1", full_name: "Kasir Satu", username: "kasir1", role: "cashier", active: true, created_at: now() }],
     settings: [{ id: 1, business_name: "PX Gili", address: "Gili Trawangan", phone: "0812", receipt_header: "", receipt_footer: "Please keep this receipt.", thank_you: "Thank you for your visit!", receipt_prefix: "PX",
       tax_percent: 10, tax_label: "Tax", service_percent: 5, service_label: "Service", logo_data: "", max_discount_pct: 100, payment_methods: ["Cash", "QRIS", "Transfer", "Card"],
-      report_enabled: false, report_hour: 22, report_emails: [] }],
+      report_enabled: false, report_hour: 22, report_emails: [], receipt_show_name: true }],
     report_log: [],
     categories: [
       { code: "rent_bike", name: "Rent Bike", icon: "🚲", color: "#16a34a", is_rental: true, sort: 1, active: true },
