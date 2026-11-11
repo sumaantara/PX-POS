@@ -1,5 +1,5 @@
 // PX POS — user management for owners/admins (create cashier accounts, reset passwords, delete).
-// Deploy: Supabase → Edge Functions → admin-users (verify JWT ON).
+// Deploy: Supabase → Edge Functions → admin-users (verify JWT OFF — the function checks the caller itself).
 // Uses the built-in SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY secrets.
 import { createClient } from "npm:@supabase/supabase-js@2";
 

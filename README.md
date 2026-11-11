@@ -4,7 +4,7 @@ Kasir & backoffice untuk layanan **Rent Bike, E-Bike, Laundry, Massage, Snorkeli
 
 - **Web:** GitHub Pages — `https://sumaantara.github.io/PX-POS/`
 - **APK Android:** [Releases → PX-POS.apk](../../releases/latest) (dibangun otomatis oleh GitHub Actions setiap ada perubahan)
-- **Database & login:** Supabase project `PX POS` (akun yang sama dengan HRM)
+- **Database & login:** Supabase project `PX POS` (org ONEderland, Singapore, `nmpinkizjivkhxbndtdk`)
 
 ## Fitur
 
