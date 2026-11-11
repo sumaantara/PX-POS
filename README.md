@@ -6,27 +6,38 @@ Kasir & backoffice untuk layanan **Rent Bike, E-Bike, Laundry, Massage, Snorkeli
 - **APK Android:** [Releases → PX-POS.apk](../../releases/latest) (dibangun otomatis oleh GitHub Actions setiap ada perubahan)
 - **Database & login:** Supabase project `PX POS` (org ONEderland, Singapore, `nmpinkizjivkhxbndtdk`)
 
-## Fitur
+## Dua aplikasi, satu kode
 
-| Menu | Isi |
-|---|---|
-| 🧾 Kasir | Pilih layanan per kategori, qty (hari / jam / kg / sesi / trip), no. sepeda / terapis / guide per item, data tamu, diskon (Rp/%), Cash / QRIS / Transfer / Card, hitung kembalian, cetak struk, kirim struk via WhatsApp |
-| 📋 Transaksi | Riwayat per tanggal, cari no. struk / tamu / no. sepeda, cetak ulang, void (admin, wajib alasan) |
-| 🚲 Rental | Sepeda & e-bike yang sedang keluar, jatuh tempo kembali, tanda terlambat, tombol "Kembali" |
-| ⏱️ Shift | Buka shift (modal awal), tutup shift (hitung kas, selisih), cetak rekap shift |
-| 📊 Backoffice | Dashboard (hari ini, bulan ini, grafik 14 hari), Laporan (rentang tanggal, per kategori/layanan/metode/kasir/hari, export CSV, cetak ringkasan), Layanan & Harga, Pengguna, Pengaturan Toko |
-| ⚙️ Setelan | Printer per perangkat, ganti password, keluar |
+| | **Android app (APK) = Kasir** | **Website = Back office** |
+|---|---|---|
+| Siapa | semua akun aktif (kasir, admin, owner) | **hanya owner & admin** (kasir ditolak) |
+| Menu | Sale · History (hari ini & kemarin) · Rentals · Shift · Settings (printer) | Dashboard · Reports · Transactions (void) · Rentals · Shifts · Services & prices · Users · Settings |
+| Cetak | Bluetooth printer (ESC/POS, logo raster) / RawBT | dialog print browser |
+
+Semua tampilan & struk berbahasa Inggris. Mode ditentukan otomatis: di dalam APK → kasir, di browser → back office.
+
+### Back office → Settings
+- **Business**, **Receipt**: logo (upload, dicetak hitam-putih di struk), teks atas, *thank-you message*, footer, prefix no. struk
+- **Tax & service charge**: nama + persen masing-masing (service dihitung dari subtotal setelah diskon; pajak dari subtotal + service; 0 = mati)
+- **Payments**, batas diskon kasir
+- **Daily sales email**: on/off, jam kirim (WITA), banyak penerima, tombol *Send now*, log pengiriman
+
+### Email penjualan harian
+`pg_cron` memanggil edge function `daily-report` tiap jam; function mengirim sekali sehari pada jam yang dipilih
+(ringkasan, per kategori/layanan/metode/kasir, daftar transaksi, sepeda yang masih keluar). Butuh:
+1. Edge Functions → Secrets: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (sama seperti project HRM)
+2. `daily-report` → Settings → **Verify JWT with legacy secret: OFF** (function memeriksa pemanggil sendiri)
 
 ### Harga awal (ubah kapan saja di Backoffice → Layanan & Harga)
 
 | Layanan | Harga |
 |---|---|
-| Rent Bike | Rp 50.000 / hari |
-| E-Bike | Rp 250.000 / hari |
-| Massage | Rp 350.000 / sesi |
-| Snorkeling Private 2 jam | Rp 1.100.000 |
-| Snorkeling Private 3 jam | Rp 1.300.000 |
-| Snorkeling Private 4 jam | Rp 1.500.000 |
+| Bike Rental | Rp 50.000 / day |
+| E-Bike Rental | Rp 250.000 / day |
+| Massage | Rp 350.000 / session |
+| Private Snorkeling 2 hours | Rp 1.100.000 |
+| Private Snorkeling 3 hours | Rp 1.300.000 |
+| Private Snorkeling 4 hours | Rp 1.500.000 |
 | Laundry | Rp 15.000 / kg *(contoh — sesuaikan)* |
 
 ## Peran & keamanan (dijaga di database, Row Level Security)
