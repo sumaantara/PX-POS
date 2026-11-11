@@ -67,9 +67,16 @@ tools/prepare-android.py patch project Android (izin Bluetooth, signing, versi)
 ## Setup ulang dari nol
 
 1. Supabase → New project → SQL Editor → jalankan `supabase/migrations/0001_init.sql`.
-2. Edge Functions → deploy `admin-users` (isi `supabase/functions/admin-users/index.ts`).
-3. Authentication → Sign In / Providers → Email: matikan **Confirm email**.
-4. Isi `www/js/config.js` dengan Project URL + anon key → push → APK & web terbangun otomatis.
-5. Buka aplikasi → *Daftar akun baru* → akun pertama jadi Owner.
+2. Edge Functions → deploy `admin-users` (isi `supabase/functions/admin-users/index.ts`), lalu di Settings function itu
+   matikan **Verify JWT with legacy secret** (function sudah mengecek login & role sendiri; project baru memakai kunci JWT ECC).
+3. Authentication → URL Configuration → Site URL = `https://sumaantara.github.io/PX-POS/`.
+4. Isi `www/js/config.js` dengan Project URL + publishable key → push → APK & web terbangun otomatis.
+5. Buka aplikasi → *Daftar akun baru* pakai **email asli** → klik link konfirmasi → akun pertama jadi Owner.
+   Akun kasir dibuat Owner/Admin di Backoffice → Pengguna (username + password, tanpa email).
+
+## Tes
+
+- `tools/test-db.sql` — tes database (jalankan di SQL Editor; semua di-rollback, hasil tampil sebagai pesan error `PX-POS-TEST`).
+- `python3 tools/ui-smoke/run.py` — tes UI di Chrome headless dengan Supabase tiruan (tablet + HP).
 
 APK ditandatangani dengan keystore di GitHub Secrets (`PX_KEYSTORE_BASE64`, `PX_KEYSTORE_PASSWORD`, `PX_KEY_ALIAS`, `PX_KEY_PASSWORD`). **Simpan cadangan keystore** — tanpa itu update APK harus uninstall dulu.
