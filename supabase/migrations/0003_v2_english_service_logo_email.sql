@@ -50,6 +50,7 @@ create table if not exists px_private.secrets (
   cron_key text not null default encode(gen_random_bytes(24), 'hex')
 );
 insert into px_private.secrets (id) values (1) on conflict do nothing;
+alter table px_private.secrets enable row level security;  -- no policies: only the owner / service role can read it
 grant usage on schema px_private to service_role;
 grant select on px_private.secrets to service_role;
 
