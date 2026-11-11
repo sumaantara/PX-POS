@@ -119,7 +119,7 @@ with sync_playwright() as p:
         check("Rp 20,000" in pg.inner_text("main"), f"{name}: price edit (typed 20,000)")
         nav("users"); pg.wait_for_selector('[data-act="user-new"]'); pg.click('[data-act="user-new"]')
         pg.fill('[name="full_name"]', "Cashier Two"); pg.fill('[name="username"]', "cashier2"); pg.fill('[name="password"]', "secret123")
-        pg.click('form[data-form="user"] button[type="submit"]'); pg.wait_for_timeout(200)
+        pg.click('form[data-form="user"] button[type="submit"]'); pg.wait_for_selector('.mbg', state='detached')
         check("fn:admin-users:create" in pg.evaluate("window.MOCK_CALLS"), f"{name}: create cashier")
         nav("store"); pg.wait_for_selector('form[data-form="store"]')
         pg.set_input_files('[data-bind="logo-file"]', LOGO); pg.wait_for_selector(".rcpt .rlogo", timeout=5000)

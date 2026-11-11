@@ -157,3 +157,6 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 .rcpt{width:calc(var(--cols,32) * 1ch + 26px);max-width:100%;box-sizing:border-box}
 .rcpt .rlogo{max-width:70%;max-height:120px;mix-blend-mode:multiply;filter:grayscale(1) contrast(1.2)}
 .rcpt .rl.big{white-space:normal;line-height:1.15}
+.top-id{min-width:0;max-width:280px}
+.top-id .brand,.top-id .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-id .brand{font-size:16px}

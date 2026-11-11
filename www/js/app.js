@@ -146,9 +146,8 @@
     const scroll = window.scrollY;
     app.innerHTML = `
       <header class="top">
-        ${S.settings.logo_data ? `<img class="top-logo" src="${h(S.settings.logo_data)}" alt="">` : `<div class="logo-mark">PX</div>`}
-        <div class="grow-0"><div class="brand">${h(S.settings.business_name || "PX")} <span class="badge ${BO ? "" : "gray"}">${BO ? "Back office" : "Cashier"}</span></div>
-          <div class="small muted">${h(S.profile.full_name)} · ${h(ROLE[S.profile.role] || S.profile.role)}</div></div>
+        <div class="grow-0 top-id"><div class="brand">${h(S.settings.business_name || "PX POS")}</div>
+          <div class="small muted">${BO ? "Back office" : "Cashier"} · ${h(S.profile.full_name)} · ${h(ROLE[S.profile.role] || S.profile.role)}</div></div>
         <nav class="nav">${nav.map(([k, i, l]) => `<a class="${S.view === k ? "on" : ""}" data-act="go" data-v="${k}"><span>${i}</span>${l}</a>`).join("")}</nav>
         <div class="grow"></div>
         ${BO ? `<button class="btn sm ghost hide-m" data-act="logout">Sign out</button>`
