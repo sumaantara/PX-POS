@@ -47,7 +47,8 @@ label.f > .inp{color:var(--ink);font-weight:400;font-size:15px}
 .badge.bad{background:#fde8e8;color:var(--bad)} .badge.warn{background:#fdf1dc;color:var(--warn)} .badge.gray{background:#eef1f1;color:var(--muted)}
 
 /* POS */
-.pos{display:grid;grid-template-columns:1fr 380px;gap:14px;align-items:start}
+.pos{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+.pos > section{min-width:0}
 .cats{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}
 .cats::-webkit-scrollbar{display:none}
 .cat{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:14px;padding:10px 14px;font-weight:650;cursor:pointer;display:flex;gap:8px;align-items:center;min-height:48px}
@@ -126,7 +127,7 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
   .bnav a .i{font-size:20px}
   .bnav a.on{color:var(--pri)}
   .page{padding:12px 12px calc(96px + var(--safe-b))}
-  .pos{grid-template-columns:1fr}
+  .pos{grid-template-columns:minmax(0,1fr)}
   .svcs{grid-template-columns:repeat(2,1fr)}
   .cart{display:none}
   .cart.open{display:block;position:fixed;inset:0;z-index:40;border-radius:0;overflow:auto;padding:calc(14px + var(--safe-t)) 14px calc(20px + var(--safe-b))}
@@ -136,3 +137,5 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
   .hide-m{display:none!important}
   #toast{bottom:calc(140px + var(--safe-b))}
 }
+.card:has(> table.t){overflow-x:auto}
+@media (max-width:900px){ table.t{font-size:13px} table.t td,table.t th{padding:7px 4px} }

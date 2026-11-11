@@ -23,7 +23,8 @@
   const h = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const rp = (n) => "Rp " + Math.round(Number(n) || 0).toLocaleString("id-ID");
   const num = (v) => { const n = Number(String(v ?? "").replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
-  const pad = (n) => String(n).padStart(2, "0");
+  const dec = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : 0; }; // qty, %, hours
+  function pad(n) { return String(n).padStart(2, "0"); }
   function today() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
   function monthStart() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`; }
   const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -41,7 +42,7 @@
   function toast(msg, bad) {
     const el = document.createElement("div");
     el.className = "tm" + (bad ? " bad" : ""); el.textContent = msg;
-    $("#toast").appendChild(el); setTimeout(() => el.remove(), bad ? 4500 : 2600);
+    const box = $("#toast"); while (box.children.length >= 2) box.firstChild.remove(); box.appendChild(el); setTimeout(() => el.remove(), bad ? 4500 : 2600);
   }
   async function run(fn, okMsg) {
     if (S.busy) return; S.busy = true; document.body.style.cursor = "progress";
@@ -102,7 +103,7 @@
   // ───────────────────────── cart maths ─────────────────────────
   function totals() {
     const sub = S.cart.reduce((a, l) => a + Math.round(l.price * (Number(l.qty) || 0)), 0);
-    let disc = S.disc.mode === "pct" ? Math.round(sub * Math.min(100, num(S.disc.v)) / 100) : Math.round(num(S.disc.v));
+    let disc = S.disc.mode === "pct" ? Math.round(sub * Math.min(100, dec(S.disc.v)) / 100) : Math.round(num(S.disc.v));
     disc = Math.max(0, Math.min(disc, sub));
     const taxPct = Number(S.settings?.tax_percent) || 0;
     const tax = Math.round((sub - disc) * taxPct / 100);
@@ -780,7 +781,7 @@
   };
 
   const BIND = {
-    qty: (el) => { const l = cartLine(el.dataset.k); if (l) { l.qty = el.value === "" ? "" : num(el.value); refreshTotals(); const amt = el.closest(".ci").querySelector(".t > .b"); if (amt) amt.textContent = rp(Math.round(l.price * (Number(l.qty) || 0))); } },
+    qty: (el) => { const l = cartLine(el.dataset.k); if (l) { l.qty = el.value === "" ? "" : dec(el.value); refreshTotals(); const amt = el.closest(".ci").querySelector(".t > .b"); if (amt) amt.textContent = rp(Math.round(l.price * (Number(l.qty) || 0))); } },
     ref: (el) => { const l = cartLine(el.dataset.k); if (l) l.item_ref = el.value; },
     cust: (el) => { S.cust[el.dataset.f] = el.value; },
     disc: (el) => { S.disc.v = el.value; refreshTotals(); },
@@ -814,7 +815,7 @@
     svc: async (fd, form) => {
       const id = form.dataset.id;
       const row = { category: fd.get("category"), name: String(fd.get("name")).trim(), price: Math.round(num(fd.get("price"))), unit: fd.get("unit"),
-        duration_hours: fd.get("duration_hours") ? num(fd.get("duration_hours")) : null, sort: Math.round(num(fd.get("sort"))), description: String(fd.get("description")).trim(), active: fd.get("active") === "on" };
+        duration_hours: fd.get("duration_hours") ? dec(fd.get("duration_hours")) : null, sort: Math.round(num(fd.get("sort"))), description: String(fd.get("description")).trim(), active: fd.get("active") === "on" };
       const ok = await run(async () => { must(id ? await sb.from("services").update(row).eq("id", id) : await sb.from("services").insert(row)); await loadMaster(); return true; }, "Layanan disimpan");
       if (ok) { closeModal(); render(); }
     },
@@ -836,7 +837,7 @@
     store: async (fd) => {
       const row = { business_name: String(fd.get("business_name")).trim(), address: String(fd.get("address")).trim(), phone: String(fd.get("phone")).trim(),
         receipt_header: String(fd.get("receipt_header")), receipt_footer: String(fd.get("receipt_footer")), receipt_prefix: String(fd.get("receipt_prefix")).trim().toUpperCase() || "PX",
-        tax_percent: num(fd.get("tax_percent")), max_discount_pct: num(fd.get("max_discount_pct")),
+        tax_percent: dec(fd.get("tax_percent")), max_discount_pct: dec(fd.get("max_discount_pct")),
         payment_methods: String(fd.get("payment_methods")).split(",").map((s) => s.trim()).filter(Boolean) };
       if (!row.payment_methods.length) return toast("Minimal satu metode bayar", true);
       const ok = await run(async () => { must(await sb.from("settings").update(row).eq("id", 1)); await loadMaster(); return true; }, "Pengaturan disimpan");
