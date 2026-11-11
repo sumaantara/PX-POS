@@ -394,7 +394,7 @@ begin
     'discount',   (select coalesce(sum(discount),0) from paid),
     'tax',        (select coalesce(sum(tax),0) from paid),
     'total',      (select coalesce(sum(total),0) from paid),
-    'by_category',(select coalesce(jsonb_agg(x order by x->>'total' desc),'[]') from (
+    'by_category',(select coalesce(jsonb_agg(x order by (x->>'total')::numeric desc),'[]') from (
                     select jsonb_build_object('category', category, 'qty', sum(qty), 'total', sum(line_total)) x
                     from items group by category) a),
     'by_service', (select coalesce(jsonb_agg(x),'[]') from (
@@ -408,7 +408,7 @@ begin
                     from paid p left join public.profiles pr on pr.id = p.cashier_id group by pr.full_name order by sum(p.total) desc) a),
     'by_day',     (select coalesce(jsonb_agg(x order by x->>'day'),'[]') from (
                     select jsonb_build_object('day', (created_at at time zone 'Asia/Makassar')::date, 'count', count(*), 'total', sum(total)) x
-                    from paid group by 1 ) a)
+                    from paid group by (created_at at time zone 'Asia/Makassar')::date ) a)
   ) into r;
   return r;
 end $$;
