@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
 <tr><td style="padding:20px 24px 26px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="6"><tr>${kpi("Net sales", rp(r.total))}${kpi("Transactions", String(r.count))}${kpi("Average sale", rp(r.count ? r.total / r.count : 0))}</tr>
   <tr>${kpi("Gross", rp(r.gross))}${kpi("Discounts", rp(r.discount))}${kpi(`${st.service_label || "Service"} + ${st.tax_label || "Tax"}`, rp(Number(r.service) + Number(r.tax)))}</tr></table>
+  ${Number(r.card_fee) ? `<p style="margin:12px 4px 0;font-size:13px;color:#5d6f6d">Includes ${esc(st.card_fee_label || "Card fee")}: <b>${rp(r.card_fee)}</b></p>` : ""}
   ${Number(r.void_count) ? `<p style="margin:12px 4px 0;font-size:13px;color:#dc2626">${r.void_count} voided sale(s) worth ${rp(r.void_total)} are excluded.</p>` : ""}
   ${table("By category", ["Category", "Qty", "Sales"], (r.by_category || []).map((x: any) => [esc(catName(x.category)), esc(Number(x.qty).toLocaleString("en-US")), rp(x.total)]))}
   ${table("By service", ["Service", "Qty", "Sales"], (r.by_service || []).map((x: any) => [esc(x.name), esc(Number(x.qty).toLocaleString("en-US")), rp(x.total)]))}
@@ -113,7 +114,7 @@ Deno.serve(async (req) => {
 </td></tr>
 <tr><td style="padding:14px 24px;border-top:1px solid #dfe7e6;font-size:12px;color:#5d6f6d">Sent automatically by PX POS${kind === "manual" ? " (requested from the back office)" : ""}. Change recipients or the time in Back office → Settings → Daily email.</td></tr>
 </table></td></tr></table></body></html>`;
-  const text = [`${biz} — Daily sales report — ${prettyDay}`, "", `Net sales: ${rp(r.total)}`, `Transactions: ${r.count}`, `Gross: ${rp(r.gross)}  Discounts: ${rp(r.discount)}  Service: ${rp(r.service)}  Tax: ${rp(r.tax)}`,
+  const text = [`${biz} — Daily sales report — ${prettyDay}`, "", `Net sales: ${rp(r.total)}`, `Transactions: ${r.count}`, `Gross: ${rp(r.gross)}  Discounts: ${rp(r.discount)}  Service: ${rp(r.service)}  Tax: ${rp(r.tax)}  ${st.card_fee_label || "Card fee"}: ${rp(r.card_fee)}`,
     Number(r.void_count) ? `Voided: ${r.void_count} (${rp(r.void_total)})` : "", "", "By payment method:", ...(r.by_method || []).map((x: any) => `  ${x.method}: ${rp(x.total)} (${x.count})`),
     "", "By service:", ...(r.by_service || []).map((x: any) => `  ${x.name} x${x.qty}: ${rp(x.total)}`)].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
 

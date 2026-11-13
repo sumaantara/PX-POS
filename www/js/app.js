@@ -111,9 +111,12 @@
     const srvPct = Number(st.service_percent) || 0, taxPct = Number(st.tax_percent) || 0;
     const srv = Math.round((sub - disc) * srvPct / 100);
     const tax = Math.round((sub - disc + srv) * taxPct / 100);
-    const total = sub - disc + srv + tax;
+    const base = sub - disc + srv + tax;
+    const feeOn = (st.card_fee_methods || []).includes(S.pay.method) && (Number(st.card_fee_percent) > 0 || Number(st.card_fee_fixed) > 0);
+    const fee = feeOn ? Math.round(base * Number(st.card_fee_percent) / 100) + Number(st.card_fee_fixed || 0) : 0;
+    const total = base + fee;
     const paid = S.pay.method === "Cash" ? (S.pay.paid === "" ? total : num(S.pay.paid)) : total;
-    return { sub, disc, srv, srvPct, tax, taxPct, total, paid, change: paid - total };
+    return { sub, disc, srv, srvPct, tax, taxPct, fee, total, paid, change: paid - total };
   }
   function addToCart(svc) {
     const cat = catOf(svc.category);
@@ -268,6 +271,7 @@
       ${t.disc ? `<div class="row"><span class="grow muted">Discount</span><span>− ${rp(t.disc)}</span></div>` : ""}
       ${t.srvPct ? `<div class="row"><span class="grow muted">${h(st.service_label || "Service")} ${t.srvPct}%</span><span>${rp(t.srv)}</span></div>` : ""}
       ${t.taxPct ? `<div class="row"><span class="grow muted">${h(st.tax_label || "Tax")} ${t.taxPct}%</span><span>${rp(t.tax)}</span></div>` : ""}
+      ${t.fee ? `<div class="row"><span class="grow muted">${h(st.card_fee_label || "Card fee")}${Number(st.card_fee_percent) ? " " + Number(st.card_fee_percent) + "%" : ""}</span><span>${rp(t.fee)}</span></div>` : ""}
       <div class="row"><span class="grow b">Total</span><span class="grand">${rp(t.total)}</span></div>
       ${S.pay.method === "Cash" && S.pay.paid !== "" ? `<div class="row"><span class="grow muted">Change</span><span class="b" style="color:${t.change < 0 ? "var(--bad)" : "var(--ok)"}">${t.change < 0 ? "Short by " + rp(-t.change) : rp(t.change)}</span></div>` : ""}`;
   }
@@ -542,6 +546,7 @@
         <div class="kpi"><div class="muted small">Sales</div><div class="v">${R.count}</div><div class="small muted">${R.void_count} voided</div></div>
         <div class="kpi"><div class="muted small">Gross</div><div class="v">${rp(R.gross)}</div><div class="small muted">Discounts ${rp(R.discount)}</div></div>
         <div class="kpi"><div class="muted small">${h(st.service_label)} / ${h(st.tax_label)}</div><div class="v">${rp(Number(R.service) + Number(R.tax))}</div><div class="small muted">${rp(R.service)} + ${rp(R.tax)}</div></div>
+        <div class="kpi"><div class="muted small">${h(st.card_fee_label || "Card fee")}</div><div class="v">${rp(R.card_fee || 0)}</div><div class="small muted">included in net sales</div></div>
       </div>
       <div class="grid2" style="margin-top:14px">
         <div class="card"><h3>By category</h3>${bars(R.by_category, (r) => `${h(catOf(r.category).icon)} ${h(catOf(r.category).name)}`, (r) => Number(r.total), (r) => catOf(r.category).color)}</div>
@@ -559,12 +564,12 @@
       .gte("created_at", dayStartISO(S.rep.from)).lt("created_at", dayEndISO(S.rep.to)).order("created_at").limit(10000)));
     if (!rows) return;
     const q = (v) => { const s = String(v ?? ""); return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const head = ["Receipt", "Date", "Time", "Status", "Cashier", "Guest", "Phone", "Note", "Category", "Service", "Ref", "Qty", "Unit", "Price", "Amount", "Receipt subtotal", "Receipt discount", "Receipt service", "Receipt tax", "Receipt total", "Payment method"];
+    const head = ["Receipt", "Date", "Time", "Status", "Cashier", "Guest", "Phone", "Note", "Category", "Service", "Ref", "Qty", "Unit", "Price", "Amount", "Receipt subtotal", "Receipt discount", "Receipt service", "Receipt tax", "Receipt card fee", "Receipt total", "Payment method"];
     const out = [head.join(",")];
     for (const t of rows) for (const [i, it] of t.items.entries()) {
       out.push([t.receipt_no, isoOf(new Date(t.created_at)), fmtT(t.created_at), t.status, t.cashier?.full_name, t.customer_name, t.customer_phone, t.customer_note,
         catOf(it.category).name, it.name, it.item_ref, it.qty, unitL(it.unit, it.qty), it.price, it.line_total,
-        i === 0 ? t.subtotal : "", i === 0 ? t.discount : "", i === 0 ? t.service_charge : "", i === 0 ? t.tax : "", i === 0 ? t.total : "", t.payment_method].map(q).join(","));
+        i === 0 ? t.subtotal : "", i === 0 ? t.discount : "", i === 0 ? t.service_charge : "", i === 0 ? t.tax : "", i === 0 ? t.card_fee : "", i === 0 ? t.total : "", t.payment_method].map(q).join(","));
     }
     const blob = new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `PX-POS_${S.rep.from}_${S.rep.to}.csv`; document.body.appendChild(a); a.click(); a.remove();
@@ -575,7 +580,7 @@
     const lr = (l, r) => { r = String(r); l = String(l).slice(0, w - r.length - 1); return l + " ".repeat(Math.max(1, w - l.length - r.length)) + r; };
     const L = [[S.settings.business_name, "center", true, true], ["SALES REPORT", "center", true], [`${S.rep.from} to ${S.rep.to}`, "center"], ["=".repeat(w)],
       [lr("Sales", R.count)], [lr("Voided", R.void_count)], [lr("Gross", n(R.gross))], [lr("Discounts", n(R.discount))],
-      ...(Number(R.service) ? [[lr(S.settings.service_label, n(R.service))]] : []), ...(Number(R.tax) ? [[lr(S.settings.tax_label, n(R.tax))]] : []),
+      ...(Number(R.service) ? [[lr(S.settings.service_label, n(R.service))]] : []), ...(Number(R.tax) ? [[lr(S.settings.tax_label, n(R.tax))]] : []), ...(Number(R.card_fee) ? [[lr(S.settings.card_fee_label || "Card fee", n(R.card_fee))]] : []),
       [lr("NET SALES", n(R.total)), "left", true], ["-".repeat(w)], ["By service:", "left", true],
       ...R.by_service.map((r) => [lr(`${r.name} x${Number(r.qty).toLocaleString("en-US")}`, n(r.total))]), ["-".repeat(w)], ["By payment method:", "left", true],
       ...R.by_method.map((r) => [lr(r.method, n(r.total))]), ["-".repeat(w)], [`Printed ${fmtDT(new Date())}`, "center"], [""]];
@@ -691,6 +696,15 @@
             <label class="f">Tax %<input class="inp" name="tax_percent" inputmode="decimal" value="${Number(s.tax_percent)}"></label>
           </div>
           <div class="small muted">Service is charged on the subtotal after discount; tax on subtotal + service. Use 0 to switch either off.</div>
+          <h3 style="margin-top:8px">Card fee</h3>
+          <div class="grid2" style="gap:10px">
+            <label class="f">Name on receipt<input class="inp" name="card_fee_label" value="${h(s.card_fee_label || "Card fee")}" maxlength="20"></label>
+            <label class="f">Fee %<input class="inp" name="card_fee_percent" inputmode="decimal" value="${Number(s.card_fee_percent || 0)}"></label>
+            <label class="f">Plus fixed amount (Rp)<input class="inp" name="card_fee_fixed" inputmode="numeric" value="${Number(s.card_fee_fixed || 0)}"></label>
+          </div>
+          <div class="small muted">Charged on top of the total (after ${h(s.tax_label || "tax")}) only for these payment methods:</div>
+          <div class="chips">${s.payment_methods.map((m) => `<label class="chip ${(s.card_fee_methods || []).includes(m) ? "on" : ""}"><input type="checkbox" name="card_fee_methods" value="${h(m)}" ${(s.card_fee_methods || []).includes(m) ? "checked" : ""} style="display:none" data-bind="chipbox"> ${h(m)}</label>`).join("")}</div>
+          <div class="small muted">Use 0 % and 0 Rp to switch the card fee off.</div>
           <h3 style="margin-top:8px">Payments</h3>
           <label class="f">Payment methods (comma separated)<input class="inp" name="payment_methods" value="${h(s.payment_methods.join(", "))}"></label>
           <label class="f">Maximum cashier discount (%)<input class="inp" name="max_discount_pct" inputmode="decimal" value="${Number(s.max_discount_pct)}"></label>
@@ -884,6 +898,7 @@
     "rep-to": (el) => { S.rep.to = el.value; S.rep.data = null; render(); },
     qty: () => render(),
     pr: (el) => { const f = el.dataset.f; P.setCfg({ [f]: el.type === "checkbox" ? el.checked : (f === "width" || f === "copies" ? Number(el.value) : el.value) }); render(); },
+    chipbox: (el) => { el.closest(".chip").classList.toggle("on", el.checked); },
     "logo-file": async (el) => {
       const file = el.files && el.files[0]; if (!file) return;
       const ok = await run(async () => { const url = await processLogo(file); must(await sb.from("settings").update({ logo_data: url }).eq("id", 1)); await loadMaster(); return true; }, "Logo saved");
@@ -933,9 +948,12 @@
       const row = { business_name: t("business_name"), receipt_show_name: fd.get("receipt_show_name") === "on", address: t("address"), phone: t("phone"), receipt_header: String(fd.get("receipt_header")), thank_you: String(fd.get("thank_you")),
         receipt_footer: String(fd.get("receipt_footer")), receipt_prefix: t("receipt_prefix").toUpperCase() || "PX",
         service_label: t("service_label") || "Service", service_percent: dec(fd.get("service_percent")), tax_label: t("tax_label") || "Tax", tax_percent: dec(fd.get("tax_percent")),
+        card_fee_label: t("card_fee_label") || "Card fee", card_fee_percent: dec(fd.get("card_fee_percent")), card_fee_fixed: num(fd.get("card_fee_fixed")),
+        card_fee_methods: fd.getAll("card_fee_methods").map(String),
         max_discount_pct: dec(fd.get("max_discount_pct")), payment_methods: t("payment_methods").split(",").map((s) => s.trim()).filter(Boolean) };
       if (!row.payment_methods.length) return toast("Add at least one payment method", true);
-      if (row.service_percent > 100 || row.tax_percent > 100) return toast("Percentages must be between 0 and 100", true);
+      row.card_fee_methods = row.card_fee_methods.filter((m) => row.payment_methods.includes(m));
+      if (row.service_percent > 100 || row.tax_percent > 100 || row.card_fee_percent > 100) return toast("Percentages must be between 0 and 100", true);
       const ok = await run(async () => { must(await sb.from("settings").update(row).eq("id", 1)); await loadMaster(); return true; }, "Settings saved");
       if (ok) render();
     },

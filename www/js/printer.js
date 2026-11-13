@@ -67,6 +67,7 @@
     if (Number(tx.discount)) add(lr("Discount", "-" + num(tx.discount), w));
     if (Number(tx.service_charge)) add(lr(`${st.service_label || "Service"} ${Number(st.service_percent) || ""}%`, num(tx.service_charge), w));
     if (Number(tx.tax)) add(lr(`${st.tax_label || "Tax"} ${Number(st.tax_percent) || ""}%`, num(tx.tax), w));
+    if (Number(tx.card_fee)) add(lr(`${st.card_fee_label || "Card fee"}${Number(st.card_fee_percent) ? " " + Number(st.card_fee_percent) + "%" : ""}`, num(tx.card_fee), w));
     add(lr("TOTAL", rupiah(tx.total), w), { bold: true });
     add(lr("Paid (" + tx.payment_method + ")", num(tx.amount_paid), w));
     if (Number(tx.change_amount)) add(lr("Change", num(tx.change_amount), w));
