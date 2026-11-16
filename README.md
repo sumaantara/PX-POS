@@ -16,7 +16,20 @@ Kasir & backoffice untuk layanan **Rent Bike, E-Bike, Laundry, Massage, Snorkeli
 
 Semua tampilan & struk berbahasa Inggris. Mode ditentukan otomatis: di dalam APK → kasir, di browser → back office.
 
-### Back office → Settings
+### Outlets (multi-outlet)
+Satu organisasi (**PeraONE Xperience**, Back office → Settings) dengan beberapa outlet (**Ratu Village**, **PeraONE Villas**, bisa ditambah).
+
+| Diatur di | Apa |
+|---|---|
+| Back office → **Outlets** | nama outlet, prefix nomor struk (Ratu `PX…`, Villas `PV…`), alamat, telepon, logo, teks atas, thank-you, footer, buka/tutup — tiap outlet punya struk & penomoran sendiri |
+| Back office → **Services & prices** → *Sold at* | layanan dijual di outlet mana (default: semua outlet) |
+| Back office → **Users** → *Works at* | kasir boleh jualan di outlet mana (wajib ≥1); admin/owner kosong = semua outlet |
+| Dashboard / Reports / Transactions / Rentals / Shifts | filter **All outlets** atau per outlet; laporan & email harian punya rincian per outlet |
+| Aplikasi kasir | perangkat memilih outlet sekali (Settings → Outlet untuk ganti); hanya layanan outlet itu yang tampil; shift & riwayat per outlet |
+
+Pajak, service, card fee, metode bayar dan email harian berlaku untuk seluruh organisasi.
+
+### Back office → Settings (organisasi)
 - **Business**, **Receipt**: logo (upload, dicetak hitam-putih di struk), teks atas, *thank-you message*, footer, prefix no. struk
 - **Tax & service charge**: nama + persen masing-masing (service dihitung dari subtotal setelah diskon; pajak dari subtotal + service; 0 = mati)
 - **Payments**, batas diskon kasir
