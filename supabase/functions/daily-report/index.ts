@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
   const from = new Date(new Date(day + "T00:00:00Z").getTime() - TZ_OFFSET_H * 3600e3).toISOString();
   const to = new Date(new Date(day + "T00:00:00Z").getTime() + (24 - TZ_OFFSET_H) * 3600e3).toISOString();
   const { data: txs } = await admin.from("transactions")
-    .select("receipt_no, created_at, customer_name, payment_method, total, status, void_reason, cashier:profiles!transactions_cashier_id_fkey(full_name), items:transaction_items(name, qty, item_ref)")
+    .select("receipt_no, created_at, customer_name, payment_method, total, status, void_reason, outlet:outlets(name), cashier:profiles!transactions_cashier_id_fkey(full_name), items:transaction_items(name, qty, item_ref)")
     .gte("created_at", from).lt("created_at", to).order("created_at").limit(500);
   const { data: cats } = await admin.from("categories").select("code,name,icon");
   const catName = (c: string) => { const x = (cats || []).find((k) => k.code === c); return x ? `${x.icon} ${x.name}` : c; };
@@ -102,12 +102,13 @@ Deno.serve(async (req) => {
   <tr>${kpi("Gross", rp(r.gross))}${kpi("Discounts", rp(r.discount))}${kpi(`${st.service_label || "Service"} + ${st.tax_label || "Tax"}`, rp(Number(r.service) + Number(r.tax)))}</tr></table>
   ${Number(r.card_fee) ? `<p style="margin:12px 4px 0;font-size:13px;color:#5d6f6d">Includes ${esc(st.card_fee_label || "Card fee")}: <b>${rp(r.card_fee)}</b></p>` : ""}
   ${Number(r.void_count) ? `<p style="margin:12px 4px 0;font-size:13px;color:#dc2626">${r.void_count} voided sale(s) worth ${rp(r.void_total)} are excluded.</p>` : ""}
+  ${(r.by_outlet || []).length > 1 ? table("By outlet", ["Outlet", "Sales count", "Amount"], (r.by_outlet || []).map((x: any) => [esc("🏠 " + x.outlet), String(x.count), rp(x.total)])) : ""}
   ${table("By category", ["Category", "Qty", "Sales"], (r.by_category || []).map((x: any) => [esc(catName(x.category)), esc(Number(x.qty).toLocaleString("en-US")), rp(x.total)]))}
   ${table("By service", ["Service", "Qty", "Sales"], (r.by_service || []).map((x: any) => [esc(x.name), esc(Number(x.qty).toLocaleString("en-US")), rp(x.total)]))}
   ${table("By payment method", ["Method", "Sales count", "Amount"], (r.by_method || []).map((x: any) => [esc(x.method), String(x.count), rp(x.total)]))}
   ${table("By cashier", ["Cashier", "Sales count", "Amount"], (r.by_cashier || []).map((x: any) => [esc(x.cashier), String(x.count), rp(x.total)]))}
   ${table("Transactions", ["Receipt · time · guest", "Method", "Total"], (txs || []).map((t: any) => [
-      `<b>${esc(t.receipt_no)}</b> · ${esc(new Date(new Date(t.created_at).getTime() + TZ_OFFSET_H * 3600e3).toISOString().slice(11, 16))} · ${esc(t.customer_name || "Guest")}<br><span style="color:#5d6f6d">${esc((t.items || []).map((i: any) => `${i.name}${Number(i.qty) !== 1 ? " ×" + Number(i.qty) : ""}${i.item_ref ? " (" + i.item_ref + ")" : ""}`).join(", "))}${t.status === "void" ? ` · <span style="color:#dc2626">VOID: ${esc(t.void_reason)}</span>` : ""}</span>`,
+      `<b>${esc(t.receipt_no)}</b> · ${esc(new Date(new Date(t.created_at).getTime() + TZ_OFFSET_H * 3600e3).toISOString().slice(11, 16))} · ${esc(t.customer_name || "Guest")}${(r.by_outlet || []).length > 1 && t.outlet ? ` · ${esc(t.outlet.name)}` : ""}<br><span style="color:#5d6f6d">${esc((t.items || []).map((i: any) => `${i.name}${Number(i.qty) !== 1 ? " ×" + Number(i.qty) : ""}${i.item_ref ? " (" + i.item_ref + ")" : ""}`).join(", "))}${t.status === "void" ? ` · <span style="color:#dc2626">VOID: ${esc(t.void_reason)}</span>` : ""}</span>`,
       esc(t.payment_method), t.status === "void" ? `<s style="color:#5d6f6d">${rp(t.total)}</s>` : rp(t.total)]))}
   ${!r.count ? `<p style="margin:20px 4px 0;color:#5d6f6d">No sales were recorded on this day.</p>` : ""}
   <p style="margin:20px 4px 0;font-size:13px;color:#5d6f6d">Bikes / e-bikes still out right now: <b>${rentalsOut ?? 0}</b></p>
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
 <tr><td style="padding:14px 24px;border-top:1px solid #dfe7e6;font-size:12px;color:#5d6f6d">Sent automatically by PX POS${kind === "manual" ? " (requested from the back office)" : ""}. Change recipients or the time in Back office → Settings → Daily email.</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [`${biz} — Daily sales report — ${prettyDay}`, "", `Net sales: ${rp(r.total)}`, `Transactions: ${r.count}`, `Gross: ${rp(r.gross)}  Discounts: ${rp(r.discount)}  Service: ${rp(r.service)}  Tax: ${rp(r.tax)}  ${st.card_fee_label || "Card fee"}: ${rp(r.card_fee)}`,
-    Number(r.void_count) ? `Voided: ${r.void_count} (${rp(r.void_total)})` : "", "", "By payment method:", ...(r.by_method || []).map((x: any) => `  ${x.method}: ${rp(x.total)} (${x.count})`),
+    Number(r.void_count) ? `Voided: ${r.void_count} (${rp(r.void_total)})` : "", "", ...((r.by_outlet || []).length > 1 ? ["By outlet:", ...(r.by_outlet || []).map((x: any) => `  ${x.outlet}: ${rp(x.total)} (${x.count})`), ""] : []), "By payment method:", ...(r.by_method || []).map((x: any) => `  ${x.method}: ${rp(x.total)} (${x.count})`),
     "", "By service:", ...(r.by_service || []).map((x: any) => `  ${x.name} x${x.qty}: ${rp(x.total)}`)].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n");
 
   try {
