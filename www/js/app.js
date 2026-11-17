@@ -29,7 +29,7 @@
   const fmtT = (d) => { const x = new Date(d); return `${pad(x.getHours())}:${pad(x.getMinutes())}`; };
   const fmtD = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   const isAdmin = () => S.profile && ["owner", "admin"].includes(S.profile.role) && S.profile.active;
-  const catOf = (code) => S.cats.find((c) => c.code === code) || { name: code, icon: "🛎️", color: "#0f766e", is_rental: false };
+  const catOf = (code) => S.cats.find((c) => c.code === code) || (code === "damage" ? { name: "Damage charges", icon: "🔧", color: "#dc2626", is_rental: false } : { name: code, icon: "🛎️", color: "#0f766e", is_rental: false });
   const unitL = (u, q = 1) => P.unitLabel(u, q);
   // outlets
   const outletOf = (id) => S.outlets.find((o) => o.id === id);
@@ -75,7 +75,7 @@
   async function run(fn, okMsg) {
     if (S.busy) return; S.busy = true; document.body.style.cursor = "progress";
     try { const r = await fn(); if (okMsg) toast(okMsg); return r; }
-    catch (e) { console.error(e); toast(errMsg(e), true); }
+    catch (e) { console.warn(e); toast(errMsg(e), true); }
     finally { S.busy = false; document.body.style.cursor = ""; }
   }
   const must = ({ data, error }) => { if (error) throw error; return data; };
@@ -84,7 +84,7 @@
   function modal(html, { wide = false, onClose = null } = {}) {
     modalOnClose = onClose;
     $("#modal-root").innerHTML = `<div class="mbg" data-act="modal-bg"><div class="modal${wide ? " wide" : ""}" role="dialog">${html}</div></div>`;
-    const f = $("#modal-root [autofocus]"); if (f) setTimeout(() => f.focus(), 30);
+    const f = $("#modal-root [autofocus]"); if (f) f.focus();
   }
   function closeModal() { $("#modal-root").innerHTML = ""; const f = modalOnClose; modalOnClose = null; if (f) f(); }
   function ask(title, body, okLabel = "Yes", bad = false) {
@@ -177,16 +177,21 @@
       <header class="top">
         <div class="grow-0 top-id"><div class="brand">${h(BO ? (S.settings.business_name || "PX POS") : outletName(S.outlet))}</div>
           <div class="small muted">${BO ? "Back office" : h(S.settings.business_name || "Cashier")} · ${h(S.profile.full_name)} · ${h(ROLE[S.profile.role] || S.profile.role)}</div></div>
-        <nav class="nav">${nav.map(([k, i, l]) => `<a class="${S.view === k ? "on" : ""}" data-act="go" data-v="${k}"><span>${i}</span>${l}</a>`).join("")}</nav>
+        <nav class="nav">${nav.map(([k, i, l]) => `<a class="${S.view === k ? "on" : ""}" data-act="go" data-v="${k}"><span>${i}</span>${l}${navBadge(k)}</a>`).join("")}</nav>
         <div class="grow"></div>
         ${BO ? `<button class="btn sm ghost hide-m" data-act="logout">Sign out</button>`
              : S.shift ? `<span class="badge hide-m">Shift open since ${fmtT(S.shift.shift.opened_at)}</span>` : `<span class="badge warn hide-m">No open shift</span>`}
       </header>
       <main class="page">${body()}</main>
-      ${BO ? "" : `<nav class="bnav">${nav.map(([k, i, l]) => `<a class="${S.view === k ? "on" : ""}" data-act="go" data-v="${k}"><span class="i">${i}</span>${l}</a>`).join("")}</nav>`}`;
+      ${BO ? "" : `<nav class="bnav">${nav.map(([k, i, l]) => `<a class="${S.view === k ? "on" : ""}" data-act="go" data-v="${k}"><span class="i">${i}${navBadge(k)}</span>${l}</a>`).join("")}</nav>`}`;
     if (S.view === "pos") window.scrollTo(0, scroll);
   }
 
+  function overdueRentals() {
+    const o = BO ? S.boOutlet : S.outlet, now = Date.now();
+    return (S.rentals || []).filter((r) => r.tx && r.tx.status === "paid" && (!o || r.tx.outlet_id === o) && r.due_at && new Date(r.due_at).getTime() < now);
+  }
+  const navBadge = (k) => { if (k !== "rental" || BO) return ""; const n = overdueRentals().length; return n ? `<span class="nbadge blink" title="${n} overdue">${n}</span>` : ""; };
   function viewLogin() {
     const reg = BO && S.authMode === "register";
     return `<div class="login"><form class="card col" data-form="${reg ? "register" : "login"}" autocomplete="on">
@@ -237,7 +242,7 @@
     const t = totals();
     return `
       ${S.shift && S.shift.shift.outlet_id && S.shift.shift.outlet_id !== S.outlet ? `<div class="card row wrap" style="margin-bottom:12px;background:#fdecec"><div class="grow">⚠️ <b>Your open shift is at ${h(outletName(S.shift.shift.outlet_id))}.</b> <span class="muted">Close it before selling here.</span></div><button class="btn sm" data-act="go" data-v="shift">Shift</button></div>` : ""}
-      ${!S.shift ? `<div class="card row wrap" style="margin-bottom:12px;background:#fff7ea"><div class="grow">⚠️ <b>No open shift.</b> <span class="muted">Open a shift so the cash drawer can be reconciled when you close.</span></div><button class="btn sm pri" data-act="go" data-v="shift">Open shift</button></div>` : ""}
+      ${!S.shift ? `<div class="card row wrap" style="margin-bottom:12px;background:#fff7ea"><div class="grow">⏱️ <b>Shift not open.</b> <span class="muted">Orders can't be taken until you open today's shift. Shifts end automatically at midnight.</span></div><button class="btn pri" data-act="shift-open">Open shift</button></div>` : ""}
       <div class="pos">
         <section>
           <div class="cats">
@@ -287,10 +292,10 @@
       ${S.cart.length ? `
       <div class="col" style="gap:8px">
         <div class="grid2" style="gap:8px">
-          <input class="inp" placeholder="Guest name" value="${h(S.cust.name)}" data-bind="cust" data-f="name">
-          <input class="inp" placeholder="Phone / WhatsApp" inputmode="tel" value="${h(S.cust.phone)}" data-bind="cust" data-f="phone">
+          <input class="inp req" placeholder="Guest name *" value="${h(S.cust.name)}" data-bind="cust" data-f="name" autocomplete="off">
+          <input class="inp req" placeholder="Phone / WhatsApp *" inputmode="tel" value="${h(S.cust.phone)}" data-bind="cust" data-f="phone" autocomplete="off">
         </div>
-        <input class="inp" placeholder="Room / hotel / note" value="${h(S.cust.note)}" data-bind="cust" data-f="note">
+        <input class="inp req" placeholder="Room / hotel / note *" value="${h(S.cust.note)}" data-bind="cust" data-f="note" autocomplete="off">
         <div class="row" style="gap:6px">
           <input class="inp grow" placeholder="Discount" inputmode="decimal" value="${h(S.disc.v)}" data-bind="disc">
           <button class="chip ${S.disc.mode === "rp" ? "on" : ""}" data-act="disc-mode" data-m="rp">Rp</button>
@@ -302,7 +307,8 @@
       ${cash ? `
         <label class="f" style="margin-top:10px">Cash received<input class="inp" inputmode="numeric" placeholder="${h(P.num(t.total))}" value="${h(S.pay.paid)}" data-bind="paid"></label>
         <div class="chips" style="margin-top:8px">${quick.map((v) => `<button class="chip" data-act="paid" data-v="${v}">${v === t.total ? "Exact" : (v / 1000).toLocaleString("en-US") + "k"}</button>`).join("")}</div>` : ""}
-      <button class="btn pri lg" style="width:100%;margin-top:12px" data-act="checkout" id="btn-pay" ${t.change < 0 ? "disabled" : ""}>Charge ${rp(t.total)}</button>` : ""}`;
+      ${S.shift ? `<button class="btn pri lg" style="width:100%;margin-top:12px" data-act="checkout" id="btn-pay" ${t.change < 0 ? "disabled" : ""}>Charge ${rp(t.total)}</button>`
+        : `<button class="btn lg" style="width:100%;margin-top:12px" data-act="shift-open">⏱️ Open shift to take orders</button>`}` : ""}`;
   }
   function totalsHtml(t) {
     const st = S.settings;
@@ -325,6 +331,9 @@
     if (!S.cart.length) return;
     if (S.cart.some((l) => !(Number(l.qty) > 0))) return toast("Quantities must be more than 0", true);
     if (t.change < 0) return toast("Cash received is less than the total", true);
+    if (!S.shift) return toast("Open your shift before taking orders", true);
+    const miss = [[!S.cust.name.trim(), "guest name"], [S.cust.phone.replace(/\D/g, "").length < 8, "phone / WhatsApp number"], [!S.cust.note.trim(), "room / hotel / note"]].filter((x) => x[0]).map((x) => x[1]);
+    if (miss.length) { document.querySelectorAll(".inp.req").forEach((i) => i.classList.toggle("bad", !i.value.trim() || (i.dataset.f === "phone" && i.value.replace(/\D/g, "").length < 8))); return toast("Please fill in the " + miss.join(", "), true); }
     const payload = {
       outlet_id: S.outlet, customer_name: S.cust.name.trim(), customer_phone: S.cust.phone.trim(), customer_note: S.cust.note.trim(),
       discount: t.disc, payment_method: S.pay.method, amount_paid: t.paid,
@@ -343,16 +352,17 @@
 
   // ───────────────────────── receipts ─────────────────────────
   function showReceipt(tx, { fresh = false } = {}) {
-    const lines = P.buildReceipt(tx, tx.items, rcptSettings(tx.outlet_id));
-    const canVoid = BO && isAdmin() && tx.status === "paid";
+    const lines = P.buildReceipt(tx, tx.items, rcptSettings(tx.outlet_id), tx.kind === "damage" ? { copyLabel: "DAMAGE CHARGE" } : {});
+    const canVoid = tx.status === "paid" && (BO ? isAdmin() : tx.outlet_id === S.outlet);
     modal(`
       ${fresh ? `<div class="center" style="margin-bottom:10px"><div style="font-size:40px">✅</div><div class="b" style="font-size:18px">Payment complete</div>
         ${Number(tx.change_amount) ? `<div class="muted">Change</div><div class="b" style="font-size:28px;color:var(--pri)">${rp(tx.change_amount)}</div>` : ""}</div>` :
         `<h2>${h(tx.receipt_no)} ${tx.status === "void" ? `<span class="badge bad">VOID</span>` : ""} ${BO && S.outlets.length > 1 ? `<span class="badge gray">${h(outletName(tx.outlet_id))}</span>` : ""}</h2>`}
-      ${tx.status === "void" ? `<div class="small" style="color:var(--bad);margin-bottom:8px">Voided${tx.voided_at ? " " + fmtDT(tx.voided_at) : ""}: ${h(tx.void_reason || "")}</div>` : ""}
+      ${tx.kind === "damage" ? `<div class="small" style="margin-bottom:8px"><span class="badge bad">🔧 Damage charge</span></div>` : ""}
+      ${tx.status === "void" ? `<div class="small" style="color:var(--bad);margin-bottom:8px">Voided${tx.voided_at ? " " + fmtDT(tx.voided_at) : ""}${tx.voided_with_pin ? " (cashier, supervisor PIN)" : ""}: ${h(tx.void_reason || "")}</div>` : ""}
       ${P.toHtml(lines)}
       <div class="mfoot">
-        ${canVoid ? `<button class="btn bad" data-act="void" data-id="${tx.id}">Void sale</button>` : ""}
+        ${canVoid && !fresh ? `<button class="btn bad" data-act="${BO ? "void" : "void-pin"}" data-id="${tx.id}">${BO ? "Void sale" : "Void / cancel"}</button>` : ""}
         <span class="grow"></span>
         ${BO ? "" : `<button class="btn" data-act="wa" data-id="${tx.id}">WhatsApp</button>`}
         <button class="btn" data-act="print" data-id="${tx.id}">🖨 Print</button>
@@ -361,7 +371,7 @@
     S.lastTx = tx;
   }
   async function printTx(tx, copyLabel) {
-    const lines = P.buildReceipt(tx, tx.items, rcptSettings(tx.outlet_id), { copyLabel });
+    const lines = P.buildReceipt(tx, tx.items, rcptSettings(tx.outlet_id), { copyLabel: copyLabel || (tx.kind === "damage" ? "DAMAGE CHARGE" : undefined) });
     await run(async () => { const m = await P.print(lines, BO ? { method: "system" } : undefined); if (m !== "system" && m !== "rawbt") toast("Receipt printed"); });
   }
   function waTx(tx) {
@@ -396,7 +406,7 @@
       <div class="card list">
         ${rows.map((t) => `<div class="li" data-act="tx-open" data-id="${t.id}" style="cursor:pointer">
           <div style="font-size:22px">${h(catOf(t.items[0]?.category).icon)}</div>
-          <div class="grow"><div class="b">${h(t.receipt_no)} ${t.status === "void" ? `<span class="badge bad">VOID</span>` : ""}</div>
+          <div class="grow"><div class="b">${h(t.receipt_no)} ${t.status === "void" ? `<span class="badge bad">VOID</span>` : ""} ${t.kind === "damage" ? `<span class="badge warn">damage</span>` : ""}</div>
             <div class="small muted">${fmtDT(t.created_at)} · ${h(t.customer_name || "Guest")} · ${h(t.items.map((i) => i.name).join(", "))}${BO ? ` · ${h(t.cashier_name || "")}${S.outlets.length > 1 && !S.boOutlet ? ` · <b>${h(outletName(t.outlet_id))}</b>` : ""}` : ""}</div></div>
           <div class="right"><div class="b" style="${t.status === "void" ? "text-decoration:line-through;color:var(--muted)" : ""}">${rp(t.total)}</div><div class="small muted">${h(t.payment_method)}</div></div>
         </div>`).join("") || `<div class="empty">No transactions.</div>`}
@@ -417,19 +427,71 @@
     return `${BO ? outletChips("rental-outlet") : ""}
       <div class="kpis" style="margin-bottom:12px">
         <div class="kpi"><div class="muted small">Out now</div><div class="v">${rows.length}</div></div>
-        <div class="kpi"><div class="muted small">Overdue</div><div class="v" style="color:${late.length ? "var(--bad)" : "inherit"}">${late.length}</div></div>
+        <div class="kpi ${late.length ? "kpi-alert blink" : ""}"><div class="muted small">Overdue — must come back</div><div class="v" style="color:${late.length ? "var(--bad)" : "inherit"}">${late.length}</div></div>
         ${S.cats.filter((c) => c.is_rental).map((c) => `<div class="kpi"><div class="muted small">${h(c.icon)} ${h(c.name)}</div><div class="v">${rows.filter((r) => r.category === c.code).length}</div></div>`).join("")}
       </div>
       <div class="card list">
         <div class="row" style="margin-bottom:4px"><h3 class="grow" style="margin:0">Units out</h3><button class="btn sm" data-act="rental-reload">↻</button></div>
-        ${rows.map((r) => { const over = r.due_at && new Date(r.due_at).getTime() < now; return `<div class="li">
+        ${rows.map((r) => { const over = r.due_at && new Date(r.due_at).getTime() < now; return `<div class="li rental ${over ? "overdue" : ""}" data-act="rental-open" data-id="${r.id}" style="cursor:pointer">
           <div style="font-size:24px">${h(catOf(r.category).icon)}</div>
           <div class="grow"><div class="b">${h(r.name)} ${r.item_ref ? `· <span style="color:var(--pri)">${h(r.item_ref)}</span>` : ""}</div>
             <div class="small muted">${h(r.tx.customer_name || "Guest")}${r.tx.customer_note ? " · " + h(r.tx.customer_note) : ""} · ${h(r.tx.receipt_no)}${BO && !o && S.outlets.length > 1 ? " · " + h(outletName(r.tx.outlet_id)) : ""}</div>
-            <div class="small">Out ${fmtDT(r.start_at)} → due <b>${r.due_at ? fmtDT(r.due_at) : "-"}</b> ${over ? `<span class="badge bad">Overdue</span>` : ""}</div></div>
+            <div class="small">Out ${fmtDT(r.start_at)} → due <b>${r.due_at ? fmtDT(r.due_at) : "-"}</b> ${over ? `<span class="badge bad blink">⚠ Overdue ${lateBy(r.due_at)}</span>` : ""}</div></div>
           <button class="btn pri sm" data-act="return" data-id="${r.id}">✓ Returned</button>
         </div>`; }).join("") || `<div class="empty">Everything is back 👍</div>`}
       </div>`;
+  }
+
+  function lateBy(due) {
+    const m = Math.max(0, Math.round((Date.now() - new Date(due).getTime()) / 60000));
+    return m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 1440)} d ${Math.floor((m % 1440) / 60)} h`;
+  }
+  function waLink(phone, text) {
+    let p = String(phone || "").replace(/\D/g, ""); if (p.startsWith("0")) p = "62" + p.slice(1);
+    return `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
+  }
+  function openUrl(url) { if (P.isNative()) window.location.href = url; else window.open(url, "_blank"); }
+  function rentalDetail(r) {
+    const over = r.due_at && new Date(r.due_at).getTime() < Date.now();
+    modal(`<h2>${h(catOf(r.category).icon)} ${h(r.name)} ${r.item_ref ? `· <span style="color:var(--pri)">${h(r.item_ref)}</span>` : ""}</h2>
+      ${over ? `<div class="card blink" style="background:#fdecec;color:var(--bad);margin-bottom:10px"><b>⚠ Overdue by ${lateBy(r.due_at)}</b> — was due ${fmtDT(r.due_at)}</div>` : ""}
+      <div class="col" style="gap:6px">
+        <div class="row"><span class="grow muted">Renter</span><b>${h(r.tx.customer_name || "-")}</b></div>
+        <div class="row"><span class="grow muted">Phone / WhatsApp</span><b>${h(r.tx.customer_phone || "-")}</b></div>
+        <div class="row"><span class="grow muted">Room / hotel / note</span><b>${h(r.tx.customer_note || "-")}</b></div>
+        <div class="row"><span class="grow muted">Receipt</span><b>${h(r.tx.receipt_no)}</b></div>
+        <div class="row"><span class="grow muted">Out since</span><b>${fmtDT(r.start_at)}</b></div>
+        <div class="row"><span class="grow muted">Due back</span><b style="${over ? "color:var(--bad)" : ""}">${r.due_at ? fmtDT(r.due_at) : "-"}</b></div>
+      </div>
+      <div class="mfoot">
+        ${r.tx.customer_phone ? `<button class="btn" data-act="rental-wa" data-id="${r.id}">💬 WhatsApp renter</button>` : ""}
+        <span class="grow"></span><button class="btn" data-act="m-close">Close</button>
+        <button class="btn pri" data-act="return" data-id="${r.id}">✓ Returned</button>
+      </div>`);
+  }
+  function returnFlow(r) {
+    modal(`<h2>Return ${h(r.name)} ${r.item_ref ? "· " + h(r.item_ref) : ""}</h2>
+      <div class="muted" style="margin-bottom:12px">${h(r.tx.customer_name || "Guest")} · ${h(r.tx.receipt_no)}</div>
+      <div class="b" style="font-size:17px;margin-bottom:10px">Is any part of the ${catOf(r.category).name.toLowerCase().includes("bike") ? "bike" : "unit"} damaged?</div>
+      <div class="grid2" style="gap:10px">
+        <button class="btn lg pri" data-act="ret-ok" data-id="${r.id}">✓ No, all good</button>
+        <button class="btn lg bad" data-act="ret-damage" data-id="${r.id}">🔧 Yes, damaged</button>
+      </div>
+      <div class="mfoot"><button class="btn" data-act="m-close">Cancel</button></div>`);
+  }
+  function damageForm(r) {
+    const methods = S.settings.payment_methods;
+    S.dmg = { id: r.id, method: methods[0] || "Cash" };
+    modal(`<h2>🔧 Damage charge</h2>
+      <div class="muted" style="margin-bottom:10px">${h(r.name)} ${r.item_ref ? "· " + h(r.item_ref) : ""} — ${h(r.tx.customer_name || "Guest")}</div>
+      <form class="col" data-form="damage" data-id="${r.id}">
+        <label class="f">What is damaged? *<input class="inp" name="note" placeholder="e.g. broken brake lever, flat tyre" required autofocus></label>
+        <label class="f">Charge to the renter (Rp) *<input class="inp" name="amount" inputmode="numeric" required placeholder="0" data-bind="dmg-amt"></label>
+        <div class="chips">${methods.map((m) => `<label class="chip ${m === S.dmg.method ? "on" : ""}"><input type="radio" name="method" value="${h(m)}" ${m === S.dmg.method ? "checked" : ""} style="display:none" data-bind="radiochip"> ${h(m)}</label>`).join("")}</div>
+        <label class="f" id="dmg-cash">Cash received (optional, for change)<input class="inp" name="paid" inputmode="numeric" placeholder="exact"></label>
+        <div class="small muted">A separate damage receipt is created and can be printed. The bike is marked as returned.</div>
+        <div class="mfoot"><button type="button" class="btn" data-act="m-close">Cancel</button><button class="btn bad" type="submit">Charge & complete return</button></div>
+      </form>`);
   }
 
   // ───────────────────────── CASHIER: shift ─────────────────────────
@@ -437,40 +499,43 @@
     let q = sb.from("shifts").select("*, cashier:profiles(full_name)").order("opened_at", { ascending: false }).limit(BO ? 100 : 15);
     if (!BO) q = q.eq("cashier_id", S.profile.id);
     S.shifts = must(await q);
+    const ids = S.shifts.map((x) => x.id);
+    if (ids.length) {
+      const tx = must(await sb.from("transactions").select("shift_id,total,status").in("shift_id", ids));
+      S.shifts.forEach((x) => { const t = tx.filter((y) => y.shift_id === x.id && y.status === "paid"); x._count = t.length; x._total = t.reduce((a, y) => a + Number(y.total), 0); });
+    }
   }
   function shiftTable() {
     if (!S.shifts) { loadShifts().then(render).catch(() => {}); return `<div class="muted">Loading…</div>`; }
     const rows = S.shifts.filter((x) => !BO || !S.boOutlet || x.outlet_id === S.boOutlet);
     const multi = S.outlets.length > 1;
-    return `<table class="t"><thead><tr>${BO ? "<th>Cashier</th>" : ""}${multi ? "<th>Outlet</th>" : ""}<th>Opened</th><th>Closed</th><th class="n">Expected cash</th><th class="n">Counted</th><th class="n">Difference</th></tr></thead><tbody>
-      ${rows.map((x) => { const d = x.closed_at ? Number(x.closing_cash) - Number(x.expected_cash) : null; return `<tr>
-        ${BO ? `<td>${h(x.cashier?.full_name || "")}</td>` : ""}${multi ? `<td>${h(outletName(x.outlet_id))}</td>` : ""}<td>${fmtDT(x.opened_at)}</td><td>${x.closed_at ? fmtDT(x.closed_at) : `<span class="badge">open</span>`}</td>
-        <td class="n">${x.closed_at ? rp(x.expected_cash) : "-"}</td><td class="n">${x.closed_at ? rp(x.closing_cash) : "-"}</td>
-        <td class="n" style="color:${d < 0 ? "var(--bad)" : d > 0 ? "var(--warn)" : "inherit"}">${d === null ? "-" : (d > 0 ? "+" : "") + rp(d)}</td></tr>`; }).join("") || `<tr><td colspan="8" class="muted">No shifts yet.</td></tr>`}</tbody></table>`;
+    return `<table class="t"><thead><tr>${BO ? "<th>Cashier</th>" : ""}${multi ? "<th>Outlet</th>" : ""}<th>Opened</th><th>Ended</th><th class="n">Sales</th><th class="n">Total</th></tr></thead><tbody>
+      ${rows.map((x) => `<tr>
+        ${BO ? `<td>${h(x.cashier?.full_name || "")}</td>` : ""}${multi ? `<td>${h(outletName(x.outlet_id))}</td>` : ""}<td>${fmtDT(x.opened_at)}</td>
+        <td>${x.closed_at ? fmtDT(x.closed_at) + (x.auto_closed ? ` <span class="badge gray">auto · midnight</span>` : "") : `<span class="badge">open</span>`}</td>
+        <td class="n">${x._count ?? "-"}</td><td class="n">${x._total != null ? rp(x._total) : "-"}</td></tr>`).join("") || `<tr><td colspan="8" class="muted">No shifts yet.</td></tr>`}</tbody></table>`;
   }
   function viewShift() {
     const s = S.shift;
     const body = !s ? `
       <div class="card col" style="max-width:460px">
-        <h3>Open shift</h3>
-        <label class="f">Opening cash in drawer<input class="inp" id="open-cash" inputmode="numeric" placeholder="0"></label>
-        <button class="btn pri lg" data-act="shift-open">Open shift</button>
+        <h3>Open today's shift</h3>
+        <div class="muted">Orders can only be taken while your shift is open. It ends automatically at midnight (WITA); a new shift can be opened from 00:01.</div>
+        <button class="btn pri lg" data-act="shift-open">⏱️ Open shift at ${h(outletName(S.outlet))}</button>
       </div>` : `
       <div class="grid2">
         <div class="card col">
           <h3>Current shift <span class="badge gray">${h(outletName(s.shift.outlet_id))}</span></h3>
           <div class="row"><span class="grow muted">Opened</span><b>${fmtDT(s.shift.opened_at)}</b></div>
-          <div class="row"><span class="grow muted">Opening cash</span><b>${rp(s.shift.opening_cash)}</b></div>
+          <div class="row"><span class="grow muted">Ends automatically</span><b>midnight (00:00)</b></div>
           <div class="row"><span class="grow muted">Sales</span><b>${s.count}${s.void_count ? ` <span class="badge bad">${s.void_count} void</span>` : ""}</b></div>
           ${Object.entries(s.by_method || {}).map(([m, v]) => `<div class="row"><span class="grow muted">${h(m)}</span><b>${rp(v)}</b></div>`).join("")}
           <div class="row"><span class="grow b">Total sales</span><b style="font-size:20px;color:var(--pri)">${rp(s.total)}</b></div>
-          <div class="row"><span class="grow muted">Cash expected in drawer</span><b>${rp(Number(s.shift.opening_cash) + Number(s.cash_sales))}</b></div>
         </div>
         <div class="card col">
-          <h3>Close shift</h3>
-          <label class="f">Cash counted<input class="inp" id="close-cash" inputmode="numeric" placeholder="0"></label>
+          <h3>End shift</h3>
           <label class="f">Note<input class="inp" id="close-note" placeholder="optional"></label>
-          <button class="btn pri lg" data-act="shift-close">Close shift & print summary</button>
+          <button class="btn pri lg" data-act="shift-close">End shift & print summary</button>
         </div>
       </div>`;
     return body + `<div class="card" style="margin-top:14px"><h3>My recent shifts</h3>${shiftTable()}</div>`;
@@ -480,12 +545,10 @@
     const lr = (l, r) => { l = String(l); r = String(r); return l + " ".repeat(Math.max(1, w - l.length - r.length)) + r; };
     const n = P.num;
     const L = [{ t: outletName(s.outlet_id) !== "—" ? outletName(s.outlet_id) : st.business_name, align: "center", bold: true, big: true }, { t: "SHIFT SUMMARY", align: "center", bold: true }, { t: "=".repeat(w) },
-      { t: lr("Cashier", S.profile.full_name) }, { t: lr("Opened", fmtDT(s.opened_at)) }, { t: lr("Closed", s.closed_at ? fmtDT(s.closed_at) : "-") }, { t: "-".repeat(w) },
+      { t: lr("Cashier", S.profile.full_name) }, { t: lr("Opened", fmtDT(s.opened_at)) }, { t: lr("Ended", s.closed_at ? fmtDT(s.closed_at) : "-") }, { t: "-".repeat(w) },
       { t: lr("Sales", sum.count) }, { t: lr("Voided", sum.void_count) },
       ...Object.entries(sum.by_method || {}).map(([m, v]) => ({ t: lr(m, n(v)) })),
       { t: lr("TOTAL", n(sum.total)), bold: true }, { t: "-".repeat(w) },
-      { t: lr("Opening cash", n(s.opening_cash)) }, { t: lr("Expected cash", n(s.expected_cash ?? Number(s.opening_cash) + Number(sum.cash_sales))) },
-      { t: lr("Counted cash", n(s.closing_cash)) }, { t: lr("Difference", n(Number(s.closing_cash) - Number(s.expected_cash))), bold: true },
       ...(s.note ? [{ t: "Note: " + s.note }] : []), { t: "" }];
     return L.map((l) => Object.assign({ align: "left", bold: false, big: false }, l, { t: String(l.t ?? "").normalize("NFD").replace(/[^\x20-\x7E]/g, "") }));
   }
@@ -772,6 +835,8 @@
         </div>
       </div>`;
   }
+  let pinLoading = false;
+  function loadPinInfo() { if (pinLoading) return; pinLoading = true; sb.rpc("supervisor_pin_info").then((r) => { S.pinInfo = must(r) || { set: false }; pinLoading = false; render(); }).catch(() => { pinLoading = false; }); }
   function viewStore() {
     const s = S.settings;
     if (S.reportLog === null) { sb.from("report_log").select("*").order("sent_at", { ascending: false }).limit(8).then((r) => { S.reportLog = r.data || []; render(); }); S.reportLog = undefined; }
@@ -818,6 +883,16 @@
         </form>
       </div>
       <div class="col" style="gap:14px">
+        <form class="card col" data-form="pin">
+          <h3>🔐 Supervisor PIN</h3>
+          ${S.pinInfo === undefined || S.pinInfo === null ? (loadPinInfo(), `<div class="muted small">Loading…</div>`) : `<div class="small">${S.pinInfo.set ? `✅ PIN is set${S.pinInfo.updated_at ? " · changed " + fmtDT(S.pinInfo.updated_at) : ""}` : `<span style="color:var(--bad)">No PIN yet — cashiers can't void sales in the app.</span>`}</div>`}
+          <div class="grid2" style="gap:10px">
+            <label class="f">New PIN (4–8 digits)<input class="inp" name="pin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,8}" required></label>
+            <label class="f">Repeat PIN<input class="inp" name="pin2" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]{4,8}" required></label>
+          </div>
+          <div class="small muted">Cashiers need this PIN to void or cancel a sale in the Android app. Five wrong attempts lock voiding for 15 minutes.</div>
+          <div class="mfoot"><button class="btn pri" type="submit">${S.pinInfo && S.pinInfo.set ? "Change PIN" : "Set PIN"}</button></div>
+        </form>
         <div class="card col"><h3>🏠 Outlets</h3>
           ${S.outlets.map((o) => `<div class="row"><span class="grow"><b>${h(o.name)}</b> <span class="small muted">· receipts ${h(o.receipt_prefix)}…</span></span><button class="btn sm" data-act="outlet-edit" data-o="${o.id}">Receipt settings</button></div>`).join("")}
         </div>
@@ -900,27 +975,41 @@
     },
     "tx-open": async (el) => { const t = await run(() => fetchTx(el.dataset.id)); if (t) showReceipt(t); },
     "tx-reload": () => { S.tx.rows = null; render(); },
+    "dmg-noop": () => {},
     "rental-reload": () => { S.rentals = null; render(); },
     "shifts-reload": () => { S.shifts = null; render(); },
-    return: async (el) => {
-      const r = S.rentals.find((x) => x.id === el.dataset.id);
-      if (!(await ask("Has it come back?", `${h(r.name)} ${r.item_ref ? "· " + h(r.item_ref) : ""} — ${h(r.tx.customer_name || "Guest")}`, "Yes, returned"))) return;
-      const ok = await run(async () => { must(await sb.rpc("return_rental", { p_item: r.id })); return true; }, "Marked as returned");
-      if (ok) { S.rentals = null; render(); }
+    "rental-open": (el, e) => { if (e.target.closest('[data-act="return"]') !== null && e.target.closest('[data-act="return"]') !== el) return; const r = S.rentals.find((x) => x.id === el.dataset.id); if (r) rentalDetail(r); },
+    "rental-wa": (el) => {
+      const r = S.rentals.find((x) => x.id === el.dataset.id); if (!r) return;
+      const over = r.due_at && new Date(r.due_at).getTime() < Date.now();
+      const text = `Hello ${r.tx.customer_name || ""}, this is ${outletName(r.tx.outlet_id)}. ${over ? `Your ${r.name}${r.item_ref ? " (" + r.item_ref + ")" : ""} was due back at ${fmtDT(r.due_at)}. Could you please return it as soon as possible?` : `A friendly reminder: your ${r.name}${r.item_ref ? " (" + r.item_ref + ")" : ""} is due back at ${fmtDT(r.due_at)}.`} Thank you!`;
+      openUrl(waLink(r.tx.customer_phone, text));
+    },
+    return: (el, e) => { if (e) e.stopPropagation(); const r = S.rentals.find((x) => x.id === el.dataset.id); if (r) returnFlow(r); },
+    "ret-ok": async (el) => {
+      const ok = await run(async () => { must(await sb.rpc("return_rental2", { p_item: el.dataset.id, p: { damaged: false } })); return true; }, "Returned — all good");
+      if (ok) { closeModal(); S.rentals = null; render(); }
+    },
+    "ret-damage": (el) => { const r = S.rentals.find((x) => x.id === el.dataset.id); if (r) damageForm(r); },
+    "void-pin": (el) => {
+      modal(`<h2>Void / cancel sale</h2><form class="col" data-form="void-pin" data-id="${el.dataset.id}">
+        <label class="f">Reason *<input class="inp" name="reason" required placeholder="e.g. guest cancelled" autofocus></label>
+        <label class="f">Supervisor PIN *<input class="inp" name="pin" type="password" inputmode="numeric" autocomplete="off" required pattern="[0-9]{4,8}"></label>
+        <div class="small muted">Ask a supervisor to enter their PIN. Voids are recorded with your name.</div>
+        <div class="mfoot"><button type="button" class="btn" data-act="m-close">Cancel</button><button class="btn bad" type="submit">Void sale</button></div></form>`);
     },
     "shift-open": async () => {
-      const cash = num($("#open-cash").value);
-      const ok = await run(async () => { must(await sb.rpc("open_shift", { p_cash: cash, p_outlet: S.outlet })); await loadShift(); return true; }, "Shift opened");
+      const ok = await run(async () => { must(await sb.rpc("open_shift", { p_cash: 0, p_outlet: S.outlet })); await loadShift(); return true; }, "Shift opened — ready to sell");
       if (ok) { S.shifts = null; render(); }
     },
     "shift-close": async () => {
-      const cash = num($("#close-cash").value), note = $("#close-note").value;
-      if (!(await ask("Close shift?", `Cash counted: <b>${rp(cash)}</b>`, "Close shift"))) return;
-      const sum = await run(async () => must(await sb.rpc("close_shift", { p_cash: cash, p_note: note })), "Shift closed");
+      const note = $("#close-note").value;
+      if (!(await ask("End shift?", "No more orders can be taken until a new shift is opened.", "End shift"))) return;
+      const sum = await run(async () => must(await sb.rpc("end_shift", { p_note: note })), "Shift ended");
       if (!sum) return;
       S.shift = null; S.shifts = null; render();
-      const lines = shiftLines(sum), diff = Number(sum.shift.closing_cash) - Number(sum.shift.expected_cash);
-      modal(`<h2>Shift summary</h2><div class="center" style="margin-bottom:10px">Cash difference: <b style="color:${diff < 0 ? "var(--bad)" : "var(--ok)"}">${(diff > 0 ? "+" : "") + rp(diff)}</b></div>${P.toHtml(lines)}
+      const lines = shiftLines(sum);
+      modal(`<h2>Shift summary</h2>${P.toHtml(lines)}
         <div class="mfoot"><button class="btn" data-act="print-lines">🖨 Print</button><button class="btn pri" data-act="m-close">Done</button></div>`);
       S.printLines = lines;
     },
@@ -996,6 +1085,7 @@
     qty: () => render(),
     pr: (el) => { const f = el.dataset.f; P.setCfg({ [f]: el.type === "checkbox" ? el.checked : (f === "width" || f === "copies" ? Number(el.value) : el.value) }); render(); },
     chipbox: (el) => { el.closest(".chip").classList.toggle("on", el.checked); },
+    radiochip: (el) => { el.closest(".chips").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.contains(el))); const cash = $("#dmg-cash"); if (cash) cash.style.display = el.value === "Cash" ? "" : "none"; },
     "logo-file": async (el) => {
       const file = el.files && el.files[0]; if (!file) return;
       const ok = await run(async () => { const url = await processLogo(file); must(await sb.from("outlets").update({ logo_data: url }).eq("id", el.dataset.o)); await loadMaster(); return true; }, "Logo saved");
@@ -1077,6 +1167,30 @@
       }, id ? "Outlet saved" : "Outlet created");
       if (saved) { S.editOutlet = saved.id || id; render(); }
     },
+    "void-pin": async (fd, form) => {
+      const id = form.dataset.id;
+      const ok = await run(async () => { must(await sb.rpc("void_sale_pin", { p_id: id, p_pin: String(fd.get("pin")), p_reason: String(fd.get("reason")).trim() })); return true; }, "Sale voided");
+      if (ok) { closeModal(); S.tx.rows = null; S.rentals = null; render(); const t = await run(() => fetchTx(id)); if (t) showReceipt(t); }
+    },
+    damage: async (fd, form) => {
+      const id = form.dataset.id, amount = num(fd.get("amount")), method = String(fd.get("method") || "Cash"), note = String(fd.get("note")).trim();
+      if (!note) return toast("Describe the damage", true);
+      if (!(amount > 0)) return toast("Enter the charge amount", true);
+      const paid = method === "Cash" && String(fd.get("paid") || "").trim() ? num(fd.get("paid")) : amount;
+      if (paid < amount) return toast("Cash received is less than the charge", true);
+      const res = await run(async () => must(await sb.rpc("return_rental2", { p_item: id, p: { damaged: true, amount, note, payment_method: method, amount_paid: paid } })), "Return completed with damage charge");
+      if (!res) return;
+      closeModal(); S.rentals = null; render(); loadShift().catch(() => {});
+      const tx = await run(() => fetchTx(res.damage_tx));
+      if (tx) { showReceipt(tx, { fresh: true }); if (P.getCfg().autoPrint) printTx(tx); }
+    },
+    pin: async (fd) => {
+      const a = String(fd.get("pin")), b = String(fd.get("pin2"));
+      if (!/^[0-9]{4,8}$/.test(a)) return toast("PIN must be 4–8 digits", true);
+      if (a !== b) return toast("The two PINs don't match", true);
+      const ok = await run(async () => { must(await sb.rpc("set_supervisor_pin", { p_pin: a })); return true; }, "Supervisor PIN saved");
+      if (ok) { S.pinInfo = null; render(); }
+    },
     email: async (fd) => {
       const list = String(fd.get("report_emails")).split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
       const bad = list.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
@@ -1105,8 +1219,21 @@
   // ───────────────────────── boot ─────────────────────────
   async function afterLogin() {
     await loadMaster();
-    if (!BO) await loadShift().catch(() => { S.shift = null; });
+    if (!BO) { await loadShift().catch(() => { S.shift = null; }); loadRentals().then(render).catch(() => {}); }
   }
+  let ticker = null;
+  function startTicker() {
+    if (BO || ticker) return;
+    ticker = setInterval(async () => {
+      if (!S.session || !S.profile || $("#modal-root").innerHTML) return;   // don't disturb an open dialog
+      const before = JSON.stringify([!!S.shift, overdueRentals().length]);
+      try { await loadShift(); await loadRentals(); } catch {}
+      const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      if (JSON.stringify([!!S.shift, overdueRentals().length]) !== before && !typing) render();
+      else document.querySelectorAll('[data-v="rental"]').forEach((a) => { const old = a.querySelector(".nbadge"); if (old) old.remove(); const b = navBadge("rental"); if (b) (a.querySelector(".i") || a).insertAdjacentHTML("beforeend", b); });
+    }, 60000);
+  }
+  startTicker();
   async function onSession(session) {
     const prevUser = S.session && S.session.user.id;
     S.session = session;

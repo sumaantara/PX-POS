@@ -162,3 +162,15 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 .top-id .brand{font-size:16px}
 .rcpt .rqr{width:52%;max-width:200px;image-rendering:pixelated;margin:4px 0;mix-blend-mode:multiply}
 #print-area .rqr{width:45%;image-rendering:pixelated}
+/* overdue rentals, required fields */
+@keyframes pxblink{0%,100%{opacity:1}50%{opacity:.25}}
+.blink{animation:pxblink 1s ease-in-out infinite}
+.nbadge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;vertical-align:top}
+.bnav .i{position:relative}
+.bnav .nbadge{position:absolute;top:-4px;right:-14px;margin:0}
+.li.rental.overdue{background:#fdecec;border-left:4px solid var(--bad);padding-left:8px;border-radius:10px}
+.li.rental.overdue .b{color:var(--bad)}
+.kpi.kpi-alert{background:#fdecec;box-shadow:0 0 0 2px var(--bad) inset}
+.inp.req::placeholder{color:#9a6b6b}
+.inp.req.bad{border-color:var(--bad);box-shadow:0 0 0 3px rgba(220,38,38,.15)}
+@media (prefers-reduced-motion: reduce){.blink{animation:none}}

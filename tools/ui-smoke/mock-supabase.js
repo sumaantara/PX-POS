@@ -26,7 +26,7 @@
     transactions: [], transaction_items: [], shifts: [],
   };
   window.MOCK_DB = DB; window.MOCK_CALLS = [];
-  let seq = 0, shift = null; const counters = {};
+  let seq = 0, shift = null, pin = window.MOCK_PIN || null; const counters = {};
   const join = (t) => Object.assign({}, t, { cashier: { full_name: DB.profiles.find((p) => p.id === t.cashier_id)?.full_name }, items: DB.transaction_items.filter((i) => i.transaction_id === t.id) });
   const unitHours = { day: 24, hour: 1 };
 
@@ -34,7 +34,7 @@
     const st = { table, filters: [], single: false, maybe: false, op: "select", row: null, limit: null };
     const q = {
       select() { return q; }, order() { return q; }, limit(n) { st.limit = n; return q; },
-      eq(k, v) { st.filters.push((r) => r[k] === v); return q; }, gte(k, v) { st.filters.push((r) => r[k] >= v); return q; }, lt(k, v) { st.filters.push((r) => r[k] < v); return q; },
+      eq(k, v) { st.filters.push((r) => r[k] === v); return q; }, in(k, vs) { st.filters.push((r) => vs.includes(r[k])); return q; }, gte(k, v) { st.filters.push((r) => r[k] >= v); return q; }, lt(k, v) { st.filters.push((r) => r[k] < v); return q; },
       single() { st.single = true; return q; }, maybeSingle() { st.maybe = true; return q; },
       update(row) { st.op = "update"; st.row = row; return q; }, insert(row) { st.op = "insert"; st.row = row; return q; }, delete() { st.op = "delete"; return q; },
       then(res, rej) { return Promise.resolve(run()).then(res, rej); },
@@ -62,10 +62,36 @@
   const RPC = {
     shift_summary: () => shift ? summary(shift) : null,
     open_shift: ({ p_cash, p_outlet }) => { if (shift) throw { message: "You already have an open shift" }; shift = { id: "sh" + (DB.shifts.length + 1), cashier_id: uid, outlet_id: p_outlet || "o1", opened_at: now(), opening_cash: p_cash, closed_at: null }; DB.shifts.push(shift); return shift.id; },
+    end_shift: ({ p_note }) => { const s = shift; if (!s) throw { message: "No open shift" }; Object.assign(s, { closed_at: now(), note: p_note || "" }); shift = null; return summary(s); },
+    supervisor_pin_info: () => ({ set: !!pin, updated_at: pin ? now() : null }),
+    set_supervisor_pin: ({ p_pin }) => { if (!/^[0-9]{4,8}$/.test(p_pin)) throw { message: "PIN must be 4–8 digits" }; pin = p_pin; },
+    void_sale_pin: ({ p_id, p_pin, p_reason }) => {
+      if (!pin) throw { message: "No supervisor PIN has been set in the back office yet" };
+      if (p_pin !== pin) throw { message: "Wrong supervisor PIN" };
+      const t = DB.transactions.find((x) => x.id === p_id); Object.assign(t, { status: "void", void_reason: p_reason, voided_with_pin: true, voided_at: now() });
+    },
+    return_rental2: ({ p_item, p }) => {
+      const it = DB.transaction_items.find((x) => x.id === p_item); if (it.rental_status !== "out") throw { message: "Rental not found or already returned" };
+      let dtx = null;
+      if (p && p.damaged) {
+        if (!shift) throw { message: "Open your shift before taking payments" };
+        const t = DB.transactions.find((x) => x.id === it.transaction_id), o = DB.outlets.find((x) => x.id === t.outlet_id);
+        const cnt = (counters[o.id] = (counters[o.id] || 0) + 1); dtx = "t" + (++seq);
+        DB.transactions.push({ id: dtx, kind: "damage", ref_tx: t.id, receipt_no: o.receipt_prefix + "261111-" + String(cnt).padStart(4, "0"), outlet_id: o.id, created_at: now(), cashier_id: uid, shift_id: shift.id,
+          customer_name: t.customer_name, customer_phone: t.customer_phone, customer_note: t.customer_note, subtotal: p.amount, discount: 0, service_charge: 0, tax: 0, card_fee: 0, total: p.amount,
+          payment_method: p.payment_method, amount_paid: p.amount_paid, change_amount: p.amount_paid - p.amount, status: "paid" });
+        DB.transaction_items.push({ id: dtx + "-0", transaction_id: dtx, category: "damage", name: "Damage charge - " + it.name, unit: "pcs", price: p.amount, qty: 1, line_total: p.amount, item_ref: it.item_ref, note: p.note + " (rental " + t.receipt_no + ")", rental_status: "none" });
+      }
+      it.rental_status = "returned"; return { returned: true, damage_tx: dtx };
+    },
     close_shift: ({ p_cash, p_note }) => { const s = shift; const sm = summary(s); Object.assign(s, { closed_at: now(), closing_cash: p_cash, expected_cash: s.opening_cash + sm.cash_sales, note: p_note }); shift = null; return summary(s); },
     create_sale: ({ p }) => {
       const st = DB.settings[0]; let sub = 0;
       const o = DB.outlets.find((x) => x.id === (p.outlet_id || "o1"));
+      if (!(p.customer_name || "").trim()) throw { message: "Guest name is required" };
+      if ((p.customer_phone || "").replace(/\D/g, "").length < 8) throw { message: "A valid phone / WhatsApp number is required" };
+      if (!(p.customer_note || "").trim()) throw { message: "Room / hotel / note is required" };
+      if (!shift) throw { message: "Open your shift before taking orders" };
       if (shift && shift.outlet_id !== o.id) throw { message: "Your open shift is at another outlet — close it first" };
       const items = p.items.map((it) => { const s = DB.services.find((x) => x.id === it.service_id);
         if (s.outlet_ids.length && !s.outlet_ids.includes(o.id)) throw { message: s.name + " is not sold at " + o.name }; const price = it.price ?? s.price; sub += Math.round(price * it.qty); return { s, price, it }; });
