@@ -16,6 +16,13 @@ Kasir & backoffice untuk layanan **Rent Bike, E-Bike, Laundry, Massage, Snorkeli
 
 Semua tampilan & struk berbahasa Inggris. Mode ditentukan otomatis: di dalam APK → kasir, di browser → back office.
 
+### Aturan kasir
+- **Data tamu wajib**: nama, nomor HP/WhatsApp (min. 8 digit) dan kamar/hotel/catatan — dicek di aplikasi dan di server.
+- **Shift wajib**: pesanan tidak bisa diproses sebelum shift dibuka (bisa dibuka langsung dari keranjang). Shift **berakhir otomatis jam 00:00 WITA** (cron `px-close-shifts` + dicek setiap transaksi); shift baru bisa dibuka mulai 00:01. Tidak ada modal awal / hitung kas.
+- **Void / cancel dari aplikasi kasir** dengan **PIN supervisor** (Back office → Settings → Supervisor PIN; disimpan ter-hash, 5× salah = kunci 15 menit). Admin tetap bisa void dari back office tanpa PIN.
+- **Rentals**: sepeda yang lewat jam kembali ditandai **merah berkedip** + badge di menu Rentals (refresh tiap menit). Klik sepeda → data penyewa (nama, HP, kamar) + tombol **WhatsApp** pengingat.
+- **Returned** → "Ada part yang rusak?" **Tidak** → selesai. **Ya** → isi kerusakan + biaya (bisa diubah kasir) + metode bayar → struk **DAMAGE CHARGE** terpisah (bisa dicetak / WhatsApp), masuk laporan sebagai "Damage charges".
+
 ### Outlets (multi-outlet)
 Satu organisasi (**PeraONE Xperience**, Back office → Settings) dengan beberapa outlet (**Ratu Village**, **PeraONE Villas**, bisa ditambah).
 
