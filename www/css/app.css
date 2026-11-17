@@ -160,3 +160,5 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 .top-id{min-width:0;max-width:280px}
 .top-id .brand,.top-id .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top-id .brand{font-size:16px}
+.rcpt .rqr{width:52%;max-width:200px;image-rendering:pixelated;margin:4px 0;mix-blend-mode:multiply}
+#print-area .rqr{width:45%;image-rendering:pixelated}

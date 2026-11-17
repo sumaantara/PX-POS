@@ -148,7 +148,24 @@ with sync_playwright() as p:
         pg.set_input_files('[data-bind="logo-file"]', LOGO); pg.wait_for_selector(".rcpt .rlogo", timeout=5000)
         check(pg.evaluate("MOCK_DB.outlets[1].logo_data.startsWith('data:image/') && MOCK_DB.outlets[0].logo_data === ''"), f"{name}: logo saved on that outlet only")
         pg.fill('form[data-form="outlet"] [name="thank_you"]', "Terima kasih from the villas!"); pg.uncheck('form[data-form="outlet"] [name="receipt_show_name"]')
+        pg.fill('form[data-form="outlet"] [name="review_url"]', "not-a-link"); pg.click('form[data-form="outlet"] button[type="submit"]'); pg.wait_for_timeout(200)
+        check(pg.evaluate("MOCK_DB.outlets[1].review_url") == "", f"{name}: invalid review link rejected")
+        pg.fill('form[data-form="outlet"] [name="review_url"]', "https://g.page/r/PeraONEVillasTest/review")
         pg.click('form[data-form="outlet"] button[type="submit"]'); pg.wait_for_timeout(300)
+        check(pg.locator(".rcpt .rqr").count() == 1 and "review us on Google" in pg.inner_text(".rcpt"), f"{name}: review QR in outlet preview")
+        if name == "bo-desktop":
+            # decode the QR exactly as the thermal printer would print it (ESC/POS raster bits)
+            bits = pg.evaluate("async () => { const L = PXPrinter.buildReceipt({receipt_no:'X',created_at:new Date(),subtotal:1,discount:0,service_charge:0,tax:0,total:1,payment_method:'Cash',amount_paid:1,change_amount:0},[],{review_url: MOCK_DB.outlets[1].review_url, review_text:'Scan'}); const b = Array.from(await PXPrinter.toEscPos(L)); const i = b.findIndex((v,k)=>v===0x1d&&b[k+1]===0x76&&b[k+2]===0x30); return b.slice(i); }")
+            wb = bits[4] + bits[5]*256; hh = bits[6] + bits[7]*256; data = bits[8:8+wb*hh]
+            from PIL import Image as _I
+            img = _I.new("L", (wb*8 + 40, hh + 40), 255)
+            for yy in range(hh):
+                for xx in range(wb*8):
+                    if data[yy*wb + xx//8] & (0x80 >> (xx % 8)): img.putpixel((xx+20, yy+20), 0)
+            img = img.resize((img.width*3, img.height*3), _I.NEAREST); img.save(f"{OUT}/qr-thermal.png")
+            import cv2
+            val, _, _ = cv2.QRCodeDetector().detectAndDecode(cv2.imread(f"{OUT}/qr-thermal.png"))
+            check(val == "https://g.page/r/PeraONEVillasTest/review", f"{name}: printed QR decodes to the review link ({val!r}, {wb*8}x{hh} dots)")
         rc = pg.inner_text(".rcpt")
         check("Terima kasih from the villas!" in rc and "PeraONE Villas" not in rc and "PV" in rc, f"{name}: outlet receipt preview")
         pg.locator(".rcpt").screenshot(path=f"{OUT}/{name}-receipt-villas.png")

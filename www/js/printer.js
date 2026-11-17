@@ -74,9 +74,31 @@
     hr("=");
     if (st.thank_you) String(st.thank_you).split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center", bold: true })));
     if (st.receipt_footer) String(st.receipt_footer).split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center" })));
+    if (st.review_url && opts.qr !== false) {
+      add("");
+      String(st.review_text || "Scan to review us on Google").split("\n").forEach((ln) => wrap(ln, w).forEach((x) => add(x, { align: "center", bold: true })));
+      L.push({ qr: st.review_url, t: "" });
+    }
     add("");
     L.cols = w;
     return L;
+  }
+
+  // ── QR code (vendor/qrcode.js) → crisp black/white PNG, quiet zone included ─────────
+  const qrCache = new Map();
+  function qrDataUrl(text, px) {
+    const key = px + "|" + text;
+    if (qrCache.has(key)) return qrCache.get(key);
+    if (typeof window.qrcode !== "function") throw new Error("QR library missing");
+    const q = window.qrcode(0, "M"); q.addData(String(text)); q.make();
+    const n = q.getModuleCount(), quiet = 4, cell = Math.max(2, Math.floor(px / (n + quiet * 2)));
+    const size = Math.ceil(cell * (n + quiet * 2) / 8) * 8, off = Math.floor((size - cell * n) / 2);   // square, multiple of 8 dots → no resampling
+    const c = document.createElement("canvas"); c.width = size; c.height = size;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, size, size); g.fillStyle = "#000";
+    for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect(off + k * cell, off + r * cell, cell, cell);
+    const url = c.toDataURL("image/png");
+    qrCache.set(key, url);
+    return url;
   }
 
   // ── logo → ESC/POS raster (GS v 0), Atkinson dithering ─────────
@@ -84,16 +106,16 @@
   function loadImage(src) {
     return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("Logo image could not be loaded")); im.src = src; });
   }
-  async function rasterLogo(dataUrl, paperDots) {
-    const key = paperDots + "|" + dataUrl.length + "|" + dataUrl.slice(-40);
+  async function rasterLogo(dataUrl, paperDots, frac = 0.7) {
+    const key = paperDots + "|" + frac + "|" + dataUrl.length + "|" + dataUrl.slice(-40);
     if (logoCache.has(key)) return logoCache.get(key);
     const im = await loadImage(dataUrl);
-    let w = Math.min(im.naturalWidth, Math.round(paperDots * 0.7));
+    let w = Math.min(im.naturalWidth, Math.round(paperDots * frac));
     let h = Math.round(im.naturalHeight * w / im.naturalWidth);
-    if (h > 240) { w = Math.round(w * 240 / h); h = 240; }
+    if (h > 240 && frac <= 0.7) { w = Math.round(w * 240 / h); h = 240; }
     w = Math.max(8, Math.ceil(w / 8) * 8);
     const c = document.createElement("canvas"); c.width = w; c.height = h;
-    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(im, 0, 0, w, h);
+    const g = c.getContext("2d"); g.imageSmoothingEnabled = frac <= 0.7; g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(im, 0, 0, w, h);
     const px = g.getImageData(0, 0, w, h).data;
     const lum = new Float32Array(w * h);
     for (let i = 0; i < w * h; i++) lum[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
@@ -121,6 +143,7 @@
       push(0x1b, 0x40);
       for (const l of lines) {
         if (l.logo) { try { const r = await rasterLogo(l.logo, dots); for (const b of r) out.push(b); } catch (e) { console.warn(e); } continue; }
+        if (l.qr) { try { const r = await rasterLogo(qrDataUrl(l.qr, Math.round(dots * 0.5)), dots, 1); for (const b of r) out.push(b); } catch (e) { console.warn(e); } continue; }
         push(0x1b, 0x61, l.align === "center" ? 1 : l.align === "right" ? 2 : 0);
         push(0x1b, 0x45, l.bold ? 1 : 0);
         push(0x1d, 0x21, l.big ? 0x11 : 0x00);
@@ -138,11 +161,14 @@
   function toHtml(lines) {
     const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
     const cols = lines.cols || getCfg().width || 32;
-    return `<div class="rcpt" style="--cols:${cols}">${lines.map((l) => l.logo
+    return `<div class="rcpt" style="--cols:${cols}">${lines.map((l) => l.qr
+      ? `<div class="rl center"><img src="${esc(safeQr(l.qr))}" alt="QR" class="rqr"></div>`
+      : l.logo
       ? `<div class="rl center"><img src="${esc(l.logo)}" alt="" class="rlogo"></div>`
       : `<div class="rl ${l.align}${l.bold ? " b" : ""}${l.big ? " big" : ""}">${esc(l.t) || "&nbsp;"}</div>`).join("")}</div>`;
   }
-  const toText = (lines, w = 32) => lines.filter((l) => !l.logo).map((l) => l.align === "center" ? l.t.padStart(Math.floor((w + l.t.length) / 2)) : l.t).join("\n");
+  const safeQr = (t) => { try { return qrDataUrl(t, 220); } catch { return ""; } };
+  const toText = (lines, w = 32) => lines.filter((l) => !l.logo).map((l) => l.qr ? l.qr : l.align === "center" ? l.t.padStart(Math.floor((w + l.t.length) / 2)) : l.t).join("\n");
 
   // ── transports ───────────────────────────────────────────
   let webDev = null, webChar = null;
@@ -224,6 +250,6 @@
       [{ name: `Test print, ${w} columns`, unit: "pcs", qty: 1, price: 50000, line_total: 50000 }], st || {});
   }
 
-  window.PXPrinter = { getCfg, setCfg, buildReceipt, toHtml, toText, toEscPos, print, listPaired, webConnect, testLines, rasterLogo,
+  window.PXPrinter = { getCfg, setCfg, buildReceipt, toHtml, toText, toEscPos, print, listPaired, webConnect, testLines, rasterLogo, qrDataUrl,
     isNative, hasNative: () => !!nativePlugin(), hasWebBt: () => !!navigator.bluetooth, isAndroid, rupiah, num, fmtDT, UNIT, unitLabel };
 })();

@@ -43,7 +43,7 @@
     const o = outletOf(outletId) || {};
     return Object.assign({}, S.settings, { business_name: o.name || S.settings.business_name, receipt_prefix: o.receipt_prefix, address: o.address || "",
       phone: o.phone || "", receipt_header: o.receipt_header || "", receipt_footer: o.receipt_footer || "", thank_you: o.thank_you || "",
-      logo_data: o.logo_data || "", receipt_show_name: o.receipt_show_name !== false });
+      logo_data: o.logo_data || "", receipt_show_name: o.receipt_show_name !== false, review_url: o.review_url || "", review_text: o.review_text || "" });
   }
   function outletChips(act = "bo-outlet") {
     if (S.outlets.length < 2) return "";
@@ -735,7 +735,7 @@
       </div>`; }).join("")}</div>`;
   }
   function outletEditor(o) {
-    const x = o || { id: "", name: "", receipt_prefix: "", active: true, sort: S.outlets.length + 1, address: "", phone: "", receipt_header: "", thank_you: "Thank you for your visit!", receipt_footer: "", logo_data: "", receipt_show_name: true };
+    const x = o || { id: "", name: "", receipt_prefix: "", active: true, sort: S.outlets.length + 1, address: "", phone: "", receipt_header: "", thank_you: "Thank you for your visit!", receipt_footer: "", logo_data: "", receipt_show_name: true, review_url: "", review_text: "" };
     return `<div class="row" style="margin-bottom:12px"><button class="btn sm" data-act="outlet-back">← Outlets</button><h3 class="grow" style="margin:0 0 0 8px">${o ? h(o.name) : "New outlet"}</h3></div>
       <div class="grid2 store">
         <form class="card col" data-form="outlet" data-id="${h(x.id)}">
@@ -749,6 +749,10 @@
           <label class="f">Text above items (optional)<textarea class="inp" name="receipt_header" rows="2">${h(x.receipt_header)}</textarea></label>
           <label class="f">Thank-you message<textarea class="inp" name="thank_you" rows="2">${h(x.thank_you)}</textarea></label>
           <label class="f">Footer (small print)<textarea class="inp" name="receipt_footer" rows="2">${h(x.receipt_footer)}</textarea></label>
+          <h3 style="margin-top:8px">⭐ Google review QR</h3>
+          <label class="f">Google review link<input class="inp" name="review_url" type="url" value="${h(x.review_url || "")}" placeholder="https://g.page/r/…/review"></label>
+          <label class="f">Text above the QR<input class="inp" name="review_text" value="${h(x.review_text || "Enjoyed your visit? Scan to review us on Google")}" maxlength="120"></label>
+          <div class="small muted">Get the link in Google Business Profile → <b>Ask for reviews</b> → copy the review link. Leave the link empty to print no QR.</div>
           <div class="grid2" style="gap:10px">
             <label class="f">Sort order<input class="inp" name="sort" inputmode="numeric" value="${x.sort}"></label>
             <label class="row" style="align-self:flex-end"><input type="checkbox" name="active" ${x.active ? "checked" : ""}> Open (can sell)</label>
@@ -1062,8 +1066,10 @@
       const id = form.dataset.id, t = (k) => String(fd.get(k) ?? "").trim();
       const row = { name: t("name"), receipt_prefix: t("receipt_prefix").toUpperCase().replace(/[^A-Z0-9]/g, ""), address: t("address"), phone: t("phone"),
         receipt_show_name: fd.get("receipt_show_name") === "on", receipt_header: String(fd.get("receipt_header")), thank_you: String(fd.get("thank_you")),
-        receipt_footer: String(fd.get("receipt_footer")), sort: Math.round(dec(fd.get("sort"))), active: fd.get("active") === "on" };
+        receipt_footer: String(fd.get("receipt_footer")), sort: Math.round(dec(fd.get("sort"))), active: fd.get("active") === "on",
+        review_url: t("review_url"), review_text: t("review_text") };
       if (!row.name || !row.receipt_prefix) return toast("Name and receipt prefix are required", true);
+      if (row.review_url && !/^https:\/\/\S+\.\S+/.test(row.review_url)) return toast("The Google review link must start with https://", true);
       if (S.outlets.some((o) => o.id !== id && o.receipt_prefix === row.receipt_prefix)) return toast("Another outlet already uses the prefix " + row.receipt_prefix, true);
       const saved = await run(async () => {
         const r = must(id ? await sb.from("outlets").update(row).eq("id", id).select().single() : await sb.from("outlets").insert(row).select().single());

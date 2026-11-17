@@ -7,7 +7,7 @@
                { id: "u-k1", full_name: "Kasir Satu", username: "kasir1", role: "cashier", active: true, created_at: now(), outlet_ids: ["o1"] }],
     outlets: [
       { id: "o1", name: "Ratu Village", active: true, sort: 1, receipt_prefix: "RV", address: "Gili Air", phone: "0812", receipt_header: "", receipt_footer: "Please keep this receipt.", thank_you: "Thank you for your visit!", logo_data: "", receipt_show_name: true },
-      { id: "o2", name: "PeraONE Villas", active: true, sort: 2, receipt_prefix: "PV", address: "Gili Air North", phone: "0813", receipt_header: "", receipt_footer: "", thank_you: "See you at the villas!", logo_data: "", receipt_show_name: true }],
+      { id: "o2", name: "PeraONE Villas", active: true, sort: 2, receipt_prefix: "PV", address: "Gili Air North", phone: "0813", receipt_header: "", receipt_footer: "", thank_you: "See you at the villas!", logo_data: "", receipt_show_name: true, review_url: "", review_text: "" }],
     settings: [{ id: 1, business_name: "PX Gili", address: "Gili Trawangan", phone: "0812", receipt_header: "", receipt_footer: "Please keep this receipt.", thank_you: "Thank you for your visit!", receipt_prefix: "PX",
       tax_percent: 10, tax_label: "Tax", service_percent: 5, service_label: "Service", logo_data: "", max_discount_pct: 100, payment_methods: ["Cash", "QRIS", "Transfer", "Card"],
       report_enabled: false, report_hour: 22, report_emails: [], receipt_show_name: true, card_fee_percent: 3, card_fee_fixed: 0, card_fee_label: "Card fee", card_fee_methods: ["Card"] }],
