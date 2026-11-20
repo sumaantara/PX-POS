@@ -704,33 +704,38 @@
 
   function viewServices() {
     return `
-      <div class="row wrap" style="margin-bottom:12px"><span class="grow muted small">Click a service to change its name or price. Changes reach the cashier app immediately.</span>
+      <div class="row wrap" style="margin-bottom:12px"><span class="grow muted small">Click a service to edit it. Tap the 🏠 outlet chips to choose where it's sold. Need a different price at one outlet? <b>Duplicate</b> it, change the price and sell each copy at one outlet. Changes reach the cashier app immediately.</span>
         <button class="btn" data-act="cat-edit" data-c="">+ Category</button><button class="btn pri" data-act="svc-edit" data-id="">+ Service</button></div>
       ${S.cats.map((c) => `<div class="card" style="margin-bottom:12px;${c.active ? "" : "opacity:.6"}">
         <div class="row"><span style="font-size:24px">${h(c.icon)}</span><h3 class="grow" style="margin:0">${h(c.name)} ${c.is_rental ? `<span class="badge">rental</span>` : ""} ${c.active ? "" : `<span class="badge gray">hidden</span>`}</h3>
           <button class="btn sm" data-act="cat-edit" data-c="${h(c.code)}">Edit</button></div>
-        <div class="list">${S.services.filter((s) => s.category === c.code).map((s) => `<div class="li" data-act="svc-edit" data-id="${s.id}" style="cursor:pointer">
-          <div class="grow"><div class="b">${h(s.name)} ${s.active ? "" : `<span class="badge gray">hidden</span>`} ${(s.outlet_ids || []).length ? `<span class="badge warn">only ${h(s.outlet_ids.map(outletName).join(", "))}</span>` : ""}</div><div class="small muted">${h(s.description || "")}${s.duration_hours ? ` · ${Number(s.duration_hours)} h` : ""}</div></div>
-          <div class="b">${rp(s.price)} <span class="small muted">/ ${unitL(s.unit)}</span></div></div>`).join("") || `<div class="muted small" style="padding:8px 0">No services yet.</div>`}</div>
+        <div class="list">${S.services.filter((s) => s.category === c.code).map((s) => `<div class="li svc-row" data-act="svc-edit" data-id="${s.id}" style="cursor:pointer">
+          <div class="grow"><div class="b">${h(s.name)} ${s.active ? "" : `<span class="badge gray">hidden</span>`}</div><div class="small muted">${h(s.description || "")}${s.duration_hours ? ` · ${Number(s.duration_hours)} h` : ""}</div>
+            ${S.outlets.length > 1 ? `<div class="chips soldat" title="Sold at — click to switch on/off">${S.outlets.map((o) => `<button class="chip sm ${soldAt(s, o.id) ? "on" : ""}" data-act="svc-outlet" data-id="${s.id}" data-o="${o.id}">🏠 ${h(o.name)}</button>`).join("")}</div>` : ""}</div>
+          <div class="right"><div class="b">${rp(s.price)} <span class="small muted">/ ${unitL(s.unit)}</span></div>
+            <button class="btn sm" data-act="svc-dup" data-id="${s.id}" style="margin-top:6px">⧉ Duplicate</button></div></div>`).join("") || `<div class="muted small" style="padding:8px 0">No services yet.</div>`}</div>
       </div>`).join("")}`;
   }
-  function svcForm(id) {
-    const s = S.services.find((x) => x.id === id) || { category: S.cats[0]?.code, name: "", price: 0, unit: "session", description: "", duration_hours: null, active: true, sort: 0 };
-    modal(`<h2>${id ? "Edit service" : "New service"}</h2><form class="col" data-form="svc" data-id="${id || ""}">
+  function svcForm(id, copyOf) {
+    const src = S.services.find((x) => x.id === (copyOf || id));
+    const s = src ? Object.assign({}, src, copyOf ? { name: src.name + " (copy)", sort: Number(src.sort || 0) + 1 } : {}) : { category: S.cats[0]?.code, name: "", price: 0, unit: "session", description: "", duration_hours: null, active: true, sort: 0, outlet_ids: [] };
+    if (copyOf) id = null;
+    modal(`<h2>${copyOf ? "Duplicate service" : id ? "Edit service" : "New service"}</h2>${copyOf ? `<div class="small muted" style="margin:-6px 0 10px">Copy of <b>${h(src.name)}</b> — change the name, price or outlets, then save.</div>` : ""}<form class="col" data-form="svc" data-id="${id || ""}">
       <label class="f">Category<select class="inp" name="category">${S.cats.map((c) => `<option value="${h(c.code)}" ${c.code === s.category ? "selected" : ""}>${h(c.icon)} ${h(c.name)}</option>`).join("")}</select></label>
       <label class="f">Service name<input class="inp" name="name" value="${h(s.name)}" required autofocus></label>
       <div class="grid2" style="gap:10px">
         <label class="f">Price (Rp)<input class="inp" name="price" inputmode="numeric" value="${Number(s.price)}" required></label>
         <label class="f">Unit<select class="inp" name="unit">${Object.keys(P.UNIT).map((k) => `<option value="${k}" ${k === s.unit ? "selected" : ""}>per ${k}</option>`).join("")}</select></label>
       </div>
+      ${S.outlets.length > 1 ? `<div class="f soldat-box"><span class="b">🏠 Sold at</span><div class="chips">${S.outlets.map((o) => { const on = !(s.outlet_ids || []).length || s.outlet_ids.includes(o.id); return `<label class="chip ${on ? "on" : ""}"><input type="checkbox" name="outlet_ids" value="${o.id}" ${on ? "checked" : ""} style="display:none" data-bind="chipbox"> ${h(o.name)}</label>`; }).join("")}</div>
+        <span class="small muted">Only ticked outlets show this service in the cashier app.</span></div>` : ""}
       <div class="grid2" style="gap:10px">
         <label class="f">Fixed duration (hours, optional)<input class="inp" name="duration_hours" inputmode="decimal" value="${s.duration_hours ?? ""}"></label>
         <label class="f">Sort order<input class="inp" name="sort" inputmode="numeric" value="${s.sort}"></label>
       </div>
       <label class="f">Description<input class="inp" name="description" value="${h(s.description)}"></label>
-      ${S.outlets.length > 1 ? `<div class="f"><span class="small muted b">Sold at</span><div class="chips">${S.outlets.map((o) => { const on = !(s.outlet_ids || []).length || s.outlet_ids.includes(o.id); return `<label class="chip ${on ? "on" : ""}"><input type="checkbox" name="outlet_ids" value="${o.id}" ${on ? "checked" : ""} style="display:none" data-bind="chipbox"> 🏠 ${h(o.name)}</label>`; }).join("")}</div></div>` : ""}
       <label class="row"><input type="checkbox" name="active" ${s.active ? "checked" : ""}> Active (shown in the cashier app)</label>
-      <div class="mfoot">${id ? `<button type="button" class="btn bad" data-act="svc-del" data-id="${id}">Delete</button><span class="grow"></span>` : ""}
+      <div class="mfoot">${id ? `<button type="button" class="btn bad" data-act="svc-del" data-id="${id}">Delete</button><button type="button" class="btn" data-act="svc-dup" data-id="${id}">⧉ Duplicate</button><span class="grow"></span>` : ""}
         <button type="button" class="btn" data-act="m-close">Cancel</button><button class="btn pri" type="submit">Save</button></div></form>`);
   }
   function catForm(code) {
@@ -1019,6 +1024,18 @@
     "rep-csv": () => exportCsv(),
     "rep-print": () => { if (S.rep.data) run(() => P.print(reportLines(), { method: "system" })); },
     "svc-edit": (el) => svcForm(el.dataset.id),
+    "svc-dup": (el, e) => { if (e) e.stopPropagation(); svcForm(null, el.dataset.id); },
+    "svc-outlet": async (el, e) => {
+      if (e) e.stopPropagation();
+      const s = S.services.find((x) => x.id === el.dataset.id); if (!s) return;
+      const cur = S.outlets.filter((o) => soldAt(s, o.id)).map((o) => o.id);
+      const next = cur.includes(el.dataset.o) ? cur.filter((x) => x !== el.dataset.o) : [...cur, el.dataset.o];
+      if (!next.length) return toast("A service must be sold at one outlet at least — hide it instead (Edit → Active)", true);
+      const outlet_ids = next.length === S.outlets.length ? [] : next;
+      const ok = await run(async () => { must(await sb.from("services").update({ outlet_ids }).eq("id", s.id)); await loadMaster(); return true; },
+        `${s.name}: ${next.length === S.outlets.length ? "sold at all outlets" : "only " + next.map(outletName).join(", ")}`);
+      if (ok) render();
+    },
     "cat-edit": (el) => catForm(el.dataset.c),
     "svc-del": async (el) => {
       if (!(await ask("Delete this service?", "Past sales are kept. To just hide it from the cashier app, untick Active instead.", "Delete", true))) return;

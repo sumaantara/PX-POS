@@ -214,10 +214,29 @@ with sync_playwright() as p:
         # service sold only at one outlet
         nav("services"); pg.click('.li[data-act="svc-edit"][data-id="s4"]')
         pg.click('form[data-form="svc"] label.chip:has(input[value="o1"])'); pg.click('form[data-form="svc"] button[type="submit"]'); pg.wait_for_timeout(200)
-        check(pg.evaluate("MOCK_DB.services.find(s=>s.id==='s4').outlet_ids") == ["o2"] and "only PeraONE Villas" in pg.inner_text("main"), f"{name}: massage only at Villas")
+        check(pg.evaluate("MOCK_DB.services.find(s=>s.id==='s4').outlet_ids") == ["o2"] and pg.locator('.li[data-id="s4"] [data-act="svc-outlet"][data-o="o1"]:not(.on)').count() == 1, f"{name}: massage only at Villas (chip off for Ratu)")
         pg.click('.li[data-act="svc-edit"][data-id="s4"]'); pg.click('form[data-form="svc"] label.chip:has(input[value="o2"])'); pg.click('form[data-form="svc"] button[type="submit"]'); pg.wait_for_timeout(200)
         check(len(pg.evaluate("MOCK_DB.services")) == 7 and pg.evaluate("MOCK_DB.services.find(s=>s.id==='s4').outlet_ids") == ["o2"], f"{name}: can't save a service with no outlet")
         pg.click('.mbg', position={"x": 5, "y": 5}) if pg.locator('.mbg').count() else None
+        # inline sold-at chips + duplicate (different price per outlet)
+        pg.click('.li[data-id="s4"] [data-act="svc-outlet"][data-o="o1"]'); pg.wait_for_timeout(250)   # massage was Villas-only → back to both
+        check(pg.evaluate("MOCK_DB.services.find(s=>s.id==='s4').outlet_ids") == [], f"{name}: chip toggles outlet on (all outlets)")
+        pg.click('.li[data-id="s2"] [data-act="svc-outlet"][data-o="o2"]'); pg.wait_for_timeout(250)
+        check(pg.evaluate("MOCK_DB.services.find(s=>s.id==='s2').outlet_ids") == ["o1"], f"{name}: chip toggles outlet off")
+        pg.click('.li[data-id="s2"] [data-act="svc-outlet"][data-o="o1"]'); pg.wait_for_timeout(250)
+        check(pg.evaluate("MOCK_DB.services.find(s=>s.id==='s2').outlet_ids") == ["o1"] and "at least" in pg.inner_text("#toast"), f"{name}: can't remove the last outlet")
+        check(pg.locator(".mbg").count() == 0, f"{name}: chip click doesn't open the edit form")
+        n0 = len(pg.evaluate("MOCK_DB.services"))
+        pg.click('.li[data-id="s2"] [data-act="svc-dup"]'); pg.wait_for_selector('form[data-form="svc"]')
+        check("(copy)" in pg.input_value('form[data-form="svc"] [name="name"]'), f"{name}: duplicate pre-fills a copy")
+        pg.fill('form[data-form="svc"] [name="name"]', "E-Bike Rental (per day)"); pg.fill('form[data-form="svc"] [name="price"]', "200,000")
+        pg.click('form[data-form="svc"] label.chip:has(input[value="o2"])'); pg.click('form[data-form="svc"] label.chip:has(input[value="o1"])')
+        pg.click('form[data-form="svc"] button[type="submit"]'); pg.wait_for_selector('.mbg', state='detached')
+        svcs = pg.evaluate("MOCK_DB.services")
+        new = [x for x in svcs if x["name"] == "E-Bike Rental (per day)" and x["price"] == 200000]
+        check(len(svcs) == n0 + 1 and len(new) == 1 and new[0]["outlet_ids"] == ["o2"] and new[0]["category"] == "ebike", f"{name}: duplicated e-bike Rp 200,000 only at Villas")
+        pg.locator(".li.svc-row").first.screenshot(path=f"{OUT}/{name}-svc-row.png") if name == "bo-desktop" else None
+        shot("03c-services")
         # user assigned to an outlet
         nav("users"); pg.click('[data-act="user-new"]')
         pg.fill('[name="full_name"]', "Villa Cashier"); pg.fill('[name="username"]', "villa1"); pg.fill('[name="password"]', "secret123")

@@ -174,3 +174,8 @@ table.t td.n,table.t th.n{text-align:right;white-space:nowrap}
 .inp.req::placeholder{color:#9a6b6b}
 .inp.req.bad{border-color:var(--bad);box-shadow:0 0 0 3px rgba(220,38,38,.15)}
 @media (prefers-reduced-motion: reduce){.blink{animation:none}}
+.chip.sm{min-height:28px;padding:3px 10px;font-size:12.5px}
+.chips.soldat{margin-top:6px;gap:6px}
+.chips.soldat .chip:not(.on){color:var(--muted);background:#f6f8f8;text-decoration:line-through}
+.soldat-box{background:var(--soft);border-radius:12px;padding:10px 12px}
+.svc-row .right{text-align:right}
